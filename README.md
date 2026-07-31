@@ -49,7 +49,7 @@ Register the server with your MCP host:
 Or run the public container image:
 
 ```sh
-docker run --rm -p 8002:8002 \
+docker run --rm -p 127.0.0.1:8002:8002 \
   -e MCP_HOST=0.0.0.0 \
   -e TERMINUS_URL -e TERMINUS_LOGIN -e TERMINUS_PASSWORD \
   ghcr.io/gjermundgaraba/terminus-mcp:latest
