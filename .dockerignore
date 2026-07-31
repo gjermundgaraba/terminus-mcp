@@ -1,0 +1,8 @@
+*
+!package.json
+!pnpm-lock.yaml
+!pnpm-workspace.yaml
+!vite.config.ts
+!tsconfig.json
+!src/
+!docs/
