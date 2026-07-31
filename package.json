@@ -1,0 +1,62 @@
+{
+  "name": "terminus-mcp",
+  "version": "0.1.0",
+  "description": "MCP server for creating and publishing content to Terminus",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "terminus",
+    "trmnl"
+  ],
+  "license": "MIT",
+  "author": "Gjermund Garaba",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gjermundgaraba/terminus-mcp.git"
+  },
+  "bin": {
+    "terminus-mcp": "./dist/index.mjs",
+    "terminus-mcp-http": "./dist/http.mjs"
+  },
+  "files": [
+    "dist",
+    "docs/screen-authoring.md"
+  ],
+  "type": "module",
+  "scripts": {
+    "build": "vp pack",
+    "check": "vp check",
+    "dev": "tsx src/index.ts",
+    "dev:http": "tsx src/http.ts",
+    "prepare": "vp config",
+    "prepublishOnly": "vp run ready",
+    "ready": "vp check && vp test run && vp pack",
+    "start": "node dist/index.mjs",
+    "start:http": "node dist/http.mjs",
+    "test": "vp test run",
+    "verify:live": "vp pack && tsx test/live.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/node": "2.0.0",
+    "@modelcontextprotocol/server": "^2.0.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@modelcontextprotocol/client": "^2.0.0",
+    "@types/node": "^24.0.0",
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2",
+    "vite": "npm:@voidzero-dev/vite-plus-core@0.2.7",
+    "vite-plus": "0.2.7"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "11.18.0",
+      "onFail": "download"
+    }
+  },
+  "engines": {
+    "node": ">=24.2.0"
+  }
+}
