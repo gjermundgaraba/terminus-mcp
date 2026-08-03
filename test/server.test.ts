@@ -400,7 +400,7 @@ test("accepts zero dimensions and reports redacted device choices", async () => 
   assert.deepEqual(context.framework.screen_variables, {});
 });
 
-test("refreshes once after an unauthorized API response", async () => {
+test("refreshes once after Terminus reports an expired JWT", async () => {
   let deviceRequests = 0;
   const fetcher: typeof fetch = async (input, init) => {
     const url = requestUrl(input);
@@ -416,7 +416,7 @@ test("refreshes once after an unauthorized API response", async () => {
     if (url.pathname === "/api/devices") {
       deviceRequests += 1;
       return authorization === "old"
-        ? new Response(null, { status: 401 })
+        ? json({ error: "expired JWT access token" }, 400)
         : json({ data: [device] });
     }
     if (url.pathname === "/api/models") return json({ data: [model] });

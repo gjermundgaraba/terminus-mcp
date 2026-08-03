@@ -268,7 +268,11 @@ export class TerminusClient {
     const token = await this.getAccessToken();
     let response = await this.authorizedFetch(path, token, init);
 
-    if (response.status === 401) {
+    const tokenExpired =
+      response.status === 401 ||
+      (response.status === 400 &&
+        (await response.clone().text()).includes("expired JWT access token"));
+    if (tokenExpired) {
       await this.renew(token);
       response = await this.authorizedFetch(path, await this.getAccessToken(), init);
     }
