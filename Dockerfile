@@ -6,7 +6,7 @@ WORKDIR /app
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends ca-certificates git \
     && rm -rf /var/lib/apt/lists/* \
-    && npm install --global pnpm@11.18.0
+    && npm install --global pnpm@12.5.1
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml vite.config.ts tsconfig.json ./
 RUN pnpm install --frozen-lockfile
 COPY src ./src

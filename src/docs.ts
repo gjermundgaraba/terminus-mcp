@@ -95,28 +95,24 @@ export class ScreenDocs {
       ),
     ]
       .filter((match) => trmnlPaths.has(match[2]!))
-      .map(
-        (match): ScreenDoc => ({
-          id: `trmnl:${match[2]}`,
-          title: match[1]!,
-          summary: match[3]!,
-          url: `https://docs.trmnl.com/go/${match[2]}.md`,
-          source: "TRMNL Docs",
-        }),
-      );
+      .map((match): ScreenDoc => ({
+        id: `trmnl:${match[2]}`,
+        title: match[1]!,
+        summary: match[3]!,
+        url: `https://docs.trmnl.com/go/${match[2]}.md`,
+        source: "TRMNL Docs",
+      }));
 
     const framework = uniqueMatches(
       frameworkIndex,
       new RegExp(`/framework/docs/${version.replace(".", "\\.")}/([a-z0-9_-]+)`, "g"),
-    ).map(
-      (slug): ScreenDoc => ({
-        id: `framework:${version}:${slug}`,
-        title: humanize(slug),
-        summary: `Official TRMNL Framework ${version} documentation for ${humanize(slug)}.`,
-        url: `https://trmnl.com/framework/docs/${version}/${slug}.md`,
-        source: "TRMNL Framework",
-      }),
-    );
+    ).map((slug): ScreenDoc => ({
+      id: `framework:${version}:${slug}`,
+      title: humanize(slug),
+      summary: `Official TRMNL Framework ${version} documentation for ${humanize(slug)}.`,
+      url: `https://trmnl.com/framework/docs/${version}/${slug}.md`,
+      source: "TRMNL Framework",
+    }));
 
     const examples = uniqueMatches(examplesIndex, /\/framework\/examples\/([a-z0-9_-]+)/g).map(
       (slug): ScreenDoc => ({

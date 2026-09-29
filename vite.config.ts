@@ -2,6 +2,10 @@ import { defineConfig } from "vite-plus";
 
 export default defineConfig({
   pack: {
+    deps: {
+      // Resolve subpaths of dependencies without an `exports` map, so the output loads in Node unbundled.
+      resolveDepSubpath: true,
+    },
     entry: ["src/index.ts", "src/http.ts"],
     platform: "node",
   },
