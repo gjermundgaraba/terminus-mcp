@@ -29,7 +29,7 @@
     "dev": "tsx src/index.ts",
     "dev:http": "tsx src/http.ts",
     "prepare": "vp config",
-    "prepublishOnly": "vp run ready",
+    "prepublishOnly": "vp pack",
     "ready": "vp check && vp test run && vp pack",
     "start": "node dist/index.mjs",
     "start:http": "node dist/http.mjs",
