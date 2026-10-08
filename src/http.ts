@@ -1,75 +1,59 @@
 #!/usr/bin/env node
 
-import { createServer as createHttpServer, type Server } from "node:http";
+import { createServer } from "node:http";
 
-import {
-  hostHeaderValidation,
-  originValidation,
-  toNodeHandler,
-  type NodeIncomingMessageLike,
-} from "@modelcontextprotocol/node";
-import { createMcpHandler } from "@modelcontextprotocol/server";
+import { NodeHttpServer, NodeRuntime } from "@effect/platform-node";
+import { ByteSize, Config, Effect, Layer, Schema, SchemaTransformation } from "effect";
+import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
+import * as ActionMcp from "@gjermundgaraba/effect-actions/ActionMcp";
 
-import { createServer as createMcpServer } from "./server.js";
-import { TerminusClient } from "./terminus/client.js";
+import { httpClientLayer } from "./http-client.js";
+import { actions, server, services } from "./server.js";
 
-const defaultAllowedHosts = ["localhost", "127.0.0.1", "[::1]", "terminus-mcp"];
+/** One entry of MCP_ALLOWED_ORIGINS, compared exactly with a request's Origin. */
+const Origin = Schema.String.pipe(
+  Schema.decodeTo(
+    Schema.Trimmed.check(
+      Schema.makeFilter((value) => URL.canParse(value) && new URL(value).origin === value, {
+        message:
+          "MCP_ALLOWED_ORIGINS entries must be exact origins, such as https://ui.example.com",
+      }),
+    ),
+    SchemaTransformation.trim(),
+  ),
+);
 
-export function startHttpServer(environment: NodeJS.ProcessEnv = process.env): Server {
-  const host = environment.MCP_HOST || "127.0.0.1";
-  const port = Number(environment.MCP_PORT ?? 8002);
-  if (!Number.isInteger(port) || port < 0 || port > 65_535) {
-    throw new Error("MCP_PORT must be an integer from 0 to 65535.");
-  }
+/**
+ * The MCP endpoint at /mcp and the container health check at /healthz. Neither authenticates
+ * its caller, so the server belongs on an access-controlled network.
+ */
+export const routes = Layer.unwrap(
+  Effect.gen(function* () {
+    const allowedOrigins = yield* Config.Array(Origin, "MCP_ALLOWED_ORIGINS").pipe(
+      Config.withDefault([]),
+    );
 
-  const allowedHosts = [
-    ...defaultAllowedHosts,
-    ...(environment.MCP_ALLOWED_HOSTS?.split(",")
-      .map((value) => value.trim())
-      .filter(Boolean) ?? []),
-  ];
-  const validateHost = hostHeaderValidation(allowedHosts);
-  const validateOrigin = originValidation(allowedHosts);
-  const client = TerminusClient.fromEnv(environment);
-  const handler = createMcpHandler(() => createMcpServer(client), {
-    onerror: (error) => console.error(error.message),
-  });
-  const serveMcp = toNodeHandler(handler, {
-    onerror: (error) => console.error(error.message),
-  });
+    return Layer.mergeAll(
+      ActionMcp.layerHttp(actions, { ...server, allowedOrigins }),
+      HttpRouter.add("GET", "/healthz", HttpServerResponse.jsonUnsafe({ status: "ok" })),
+    );
+  }),
+);
 
-  const server = createHttpServer((request, response) => {
-    if (!validateHost(request, response) || !validateOrigin(request, response)) return;
+export const main = Layer.unwrap(
+  Effect.gen(function* () {
+    const host = yield* Config.String("MCP_HOST").pipe(Config.withDefault("127.0.0.1"));
+    const port = yield* Config.Port("MCP_PORT").pipe(Config.withDefault(8002));
 
-    const pathname = new URL(request.url ?? "/", "http://localhost").pathname;
-    if (pathname === "/healthz") {
-      if (request.method !== "GET") {
-        response.writeHead(405, { Allow: "GET" }).end();
-        return;
-      }
-      response.writeHead(200, { "Content-Type": "application/json" });
-      response.end('{"status":"ok"}');
-      return;
-    }
-    if (pathname !== "/mcp") {
-      response.writeHead(404).end();
-      return;
-    }
-
-    void serveMcp(request as NodeIncomingMessageLike, response);
-  });
-
-  server.on("close", () => void handler.close());
-  server.listen(port, host);
-  return server;
-}
+    return HttpRouter.serve(routes, { disableLogger: true }).pipe(
+      Layer.provide(NodeHttpServer.layer(createServer, { host, port })),
+      // A screen's html is up to 1,000,000 characters, at most six bytes each once JSON-escaped.
+      Layer.provide(Layer.succeed(HttpServerRequest.MaxBodySize, ByteSize.mebibytes(8))),
+      Layer.provide(Layer.provide(services, httpClientLayer)),
+    );
+  }),
+);
 
 if (import.meta.main) {
-  const server = startHttpServer();
-  server.on("listening", () => {
-    const address = server.address();
-    if (address && typeof address !== "string") {
-      console.error(`Terminus MCP listening on http://${address.address}:${address.port}/mcp`);
-    }
-  });
+  Layer.launch(main).pipe(NodeRuntime.runMain);
 }

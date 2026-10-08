@@ -1,169 +1,112 @@
 import assert from "node:assert/strict";
 
-import { Client } from "@modelcontextprotocol/client";
-import { StdioClientTransport } from "@modelcontextprotocol/client/stdio";
+import { NodeRuntime } from "@effect/platform-node";
+import { Effect, flow, Layer, Redacted } from "effect";
+import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
+import * as Action from "@gjermundgaraba/effect-actions/Action";
 
-import type { ScreenDoc } from "../src/docs.js";
-import type {
-  DisplayContext,
-  FrameworkContext,
-  SavedPlaylist,
-  Screen,
-} from "../src/terminus/contracts.js";
+import { httpClientLayer } from "../src/http-client.js";
+import { actions, services } from "../src/server.js";
+import { terminusConfig } from "../src/terminus/client.js";
+import { type FrameworkContext, Tokens } from "../src/terminus/contracts.js";
 
-const environment = {
-  TERMINUS_URL: required("TERMINUS_URL"),
-  TERMINUS_LOGIN: required("TERMINUS_LOGIN"),
-  TERMINUS_PASSWORD: required("TERMINUS_PASSWORD"),
-};
+const created: { screen?: number; playlist?: number } = {};
 
-const mcp = new Client({ name: "terminus-mcp-live-test", version: "1.0.0" });
-const transport = new StdioClientTransport({
-  command: process.execPath,
-  args: ["dist/index.mjs"],
-  cwd: process.cwd(),
-  env: environment,
-});
-let screenId: number | undefined;
-let playlistId: number | undefined;
+const verify = Effect.gen(function* () {
+  const terminus = yield* Action.client(actions);
 
-try {
-  await mcp.connect(transport);
-
-  const { context } = await call<{ context: DisplayContext }>("get_display_context", {});
+  const { context } = yield* terminus.get_display_context();
   const { device, model, framework } = context;
-  const deviceId = device.id;
-  const modelId = model.id;
   const originalPlaylistId = device.playlist_id;
-  assert.notEqual(
-    originalPlaylistId,
-    null,
+  assert.ok(
+    originalPlaylistId !== null,
     "The live device needs an existing playlist for a no-op assignment test",
   );
 
-  await call("list_screens", { model_id: modelId });
-  await call("list_playlists", {});
-  const { docs: entryPoints } = await call<{ docs: ScreenDoc[] }>("search_screen_docs", {});
+  yield* terminus.list_screens({ model_id: model.id });
+  yield* terminus.list_playlists();
+  const { docs: entryPoints } = yield* terminus.search_screen_docs();
   assert.ok(entryPoints.some(({ id }) => id === "terminus:screen-authoring"));
-  await call("read_screen_doc", { doc_id: "terminus:screen-authoring" });
-  const { docs: structureDocs } = await call<{ docs: ScreenDoc[] }>("search_screen_docs", {
-    query: "structure",
-  });
+  yield* terminus.read_screen_doc({ doc_id: "terminus:screen-authoring" });
+  const { docs: structureDocs } = yield* terminus.search_screen_docs({ query: "structure" });
   const structureDoc = structureDocs[0];
   assert.ok(structureDoc);
   assert.match(structureDoc.id, /^framework:\d+\.\d+:structure$/);
-  await call("read_screen_doc", { doc_id: structureDoc.id });
+  yield* terminus.read_screen_doc({ doc_id: structureDoc.id });
 
-  const suffix = Date.now().toString(36);
-  const name = `terminus-mcp-verify-${suffix}`;
-  const { screen: created } = await call<{ screen: Screen }>("create_screen", {
-    model_id: modelId,
+  const name = `terminus-mcp-verify-${Date.now().toString(36)}`;
+  const { screen } = yield* terminus.create_screen({
+    model_id: model.id,
     name,
     label: "Terminus MCP verification",
     html: verificationHtml(framework),
   });
-  screenId = created.id;
+  created.screen = screen.id;
 
-  await call("get_screen_image", { screen_id: screenId });
-  await call("update_screen", {
-    screen_id: screenId,
+  const { image } = yield* terminus.get_screen_image({ screen_id: screen.id });
+  assert.match(image.mimeType, /^image\//);
+  assert.ok(image.data.byteLength > 0, "The rendered image is empty");
+  yield* terminus.update_screen({
+    screen_id: screen.id,
     label: "Terminus MCP verification updated",
     html: verificationHtml(framework, true),
   });
 
-  const saved = await call<SavedPlaylist>("save_playlist", {
+  const saved = yield* terminus.save_playlist({
     name,
     label: "Terminus MCP verification",
     mode: "manual",
-    screen_ids: [screenId],
+    screen_ids: [screen.id],
   });
   assert.equal(saved.action, "created");
-  playlistId = saved.playlist.id;
+  created.playlist = saved.playlist.id;
 
-  const updated = await call<SavedPlaylist>("save_playlist", {
-    playlist_id: playlistId,
+  const updated = yield* terminus.save_playlist({
+    playlist_id: saved.playlist.id,
     name,
     label: "Terminus MCP verification updated",
     mode: "automatic",
-    screen_ids: [screenId],
+    screen_ids: [screen.id],
   });
   assert.equal(updated.action, "updated");
 
-  await call("assign_playlist", {
-    device_id: deviceId,
-    playlist_id: originalPlaylistId,
-  });
+  yield* terminus.assign_playlist({ device_id: device.id, playlist_id: originalPlaylistId });
 
-  process.stderr.write("Live verification passed for all ten MCP tools.\n");
-} finally {
-  await mcp.close().catch(() => undefined);
-  await cleanup(playlistId, screenId);
-}
+  yield* Effect.logInfo("Live verification passed for all ten actions.");
+});
 
-async function call<T = Record<string, unknown>>(
-  name: string,
-  args: Record<string, unknown>,
-): Promise<T> {
-  const result = await mcp.callTool({ name, arguments: args });
-  if (result.isError) {
-    const text = result.content.find((item) => item.type === "text");
-    throw new Error(text?.type === "text" ? text.text : `${name} failed`);
-  }
-  assert.ok(result.structuredContent, `${name} returned no structured content`);
-  return result.structuredContent as T;
-}
+/** Deletes what the run created, which no action can. */
+const cleanup = Effect.gen(function* () {
+  if (created.screen === undefined && created.playlist === undefined) return;
 
-async function cleanup(
-  temporaryPlaylistId: number | undefined,
-  temporaryScreenId: number | undefined,
-): Promise<void> {
-  if (temporaryPlaylistId === undefined && temporaryScreenId === undefined) return;
+  const { baseUrl, login, password } = yield* terminusConfig;
+  const http = (yield* HttpClient.HttpClient).pipe(
+    HttpClient.mapRequest(
+      flow(HttpClientRequest.prependUrl(baseUrl), HttpClientRequest.acceptJson),
+    ),
+    HttpClient.filterStatusOk,
+  );
 
-  const baseUrl = new URL(environment.TERMINUS_URL);
-  if (!baseUrl.pathname.endsWith("/")) baseUrl.pathname += "/";
-  const login = await fetch(new URL("login", baseUrl), {
-    method: "POST",
-    redirect: "manual",
-    headers: { Accept: "application/json", "Content-Type": "application/json" },
-    body: JSON.stringify({
-      login: environment.TERMINUS_LOGIN,
-      password: environment.TERMINUS_PASSWORD,
-    }),
-  });
-  assert.ok(login.ok, `Cleanup login failed with HTTP ${login.status}`);
-  const body = (await login.json()) as { access_token?: unknown };
-  if (typeof body.access_token !== "string") {
-    throw new Error("Cleanup login returned no token");
-  }
-  const token = body.access_token;
+  const { access_token } = yield* http
+    .execute(
+      HttpClientRequest.post("login").pipe(
+        HttpClientRequest.bodyJsonUnsafe({ login, password: Redacted.value(password) }),
+      ),
+    )
+    .pipe(Effect.flatMap(HttpClientResponse.schemaBodyJson(Tokens)));
 
-  for (const target of [
-    temporaryPlaylistId && { collection: "api/playlists", id: temporaryPlaylistId },
-    temporaryScreenId && { collection: "api/screens", id: temporaryScreenId },
-  ]) {
-    if (!target) continue;
-    const response = await fetch(new URL(`${target.collection}/${target.id}`, baseUrl), {
-      method: "DELETE",
-      redirect: "manual",
-      headers: { Accept: "application/json", Authorization: token },
-    });
-    assert.ok(
-      response.ok,
-      `Cleanup failed for ${target.collection}/${target.id} with HTTP ${response.status}`,
-    );
-
-    const verification = await fetch(new URL(target.collection, baseUrl), {
-      redirect: "manual",
-      headers: { Accept: "application/json", Authorization: token },
-    });
-    assert.ok(verification.ok, `Cleanup verification failed with HTTP ${verification.status}`);
-    const listing = (await verification.json()) as { data?: Array<{ id?: unknown }> };
-    assert.ok(
-      Array.isArray(listing.data) && !listing.data.some(({ id }) => id === target.id),
-      `Temporary object ${target.id} still exists`,
+  for (const [collection, id] of [
+    ["api/playlists", created.playlist],
+    ["api/screens", created.screen],
+  ] as const) {
+    if (id === undefined) continue;
+    yield* http.execute(
+      HttpClientRequest.delete(`${collection}/${id}`).pipe(
+        HttpClientRequest.setHeader("Authorization", access_token),
+      ),
     );
   }
-}
+});
 
 function verificationHtml(framework: FrameworkContext, updated = false): string {
   const style = Object.entries(framework.screen_variables)
@@ -184,8 +127,10 @@ function verificationHtml(framework: FrameworkContext, updated = false): string 
 </div></body></html>`;
 }
 
-function required(name: keyof NodeJS.ProcessEnv): string {
-  const value = process.env[name];
-  if (!value) throw new Error(`${name} is required.`);
-  return value;
-}
+verify.pipe(
+  Effect.scoped,
+  Effect.ensuring(Effect.orDie(cleanup)),
+  // The cleanup reads the HttpClient too.
+  Effect.provide(Layer.provideMerge(services, httpClientLayer)),
+  NodeRuntime.runMain,
+);

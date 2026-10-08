@@ -9,6 +9,9 @@ export default defineConfig({
     entry: ["src/index.ts", "src/http.ts"],
     platform: "node",
   },
+  test: {
+    globalSetup: ["test/build.ts"],
+  },
   staged: {
     "*": "vp check --fix",
   },

@@ -1,100 +1,104 @@
 import { readFile } from "node:fs/promises";
 
-export interface ScreenDoc {
-  id: string;
-  title: string;
-  summary: string;
-  url: string;
-  source: "Terminus MCP" | "TRMNL Docs" | "TRMNL Framework";
-}
+import { Context, Effect, Exit, Layer, Schema } from "effect";
+import { HttpClient, HttpClientRequest } from "effect/http";
+
+import { download } from "./http-client.js";
+
+/** The ID of the authoring guide this server ships, which agents read before writing a screen. */
+export const AUTHORING_GUIDE_ID = "terminus:screen-authoring";
+
+export class DocsError extends Schema.TaggedError<DocsError>()("DocsError", {
+  message: Schema.String,
+}) {}
+
+export const ScreenDoc = Schema.Struct({
+  id: Schema.String,
+  title: Schema.String,
+  summary: Schema.String,
+  url: Schema.String,
+  source: Schema.Literals(["Terminus MCP", "TRMNL Docs", "TRMNL Framework"]),
+});
+
+export type ScreenDoc = typeof ScreenDoc.Type;
 
 const localDoc: ScreenDoc = {
-  id: "terminus:screen-authoring",
+  id: AUTHORING_GUIDE_ID,
   title: "Authoring screens through Terminus MCP",
   summary: "Required full-document format and the safe render-to-publish workflow.",
   url: "terminus-mcp://docs/screen-authoring",
   source: "Terminus MCP",
 };
 
-const trmnlPaths = new Set([
-  "private-plugins/templates",
-  "private-plugins/templates-advanced",
-  "private-plugins/reusing-markup",
-  "diy/imagemagick-guide",
+/** The docs.trmnl.com pages in the catalog, and whether search lists each without a query. */
+const trmnlPages = new Map([
+  ["private-plugins/templates", true],
+  ["private-plugins/templates-advanced", true],
+  ["private-plugins/reusing-markup", false],
+  ["diy/imagemagick-guide", false],
 ]);
 
-export class ScreenDocs {
-  constructor(private readonly fetcher: typeof fetch = fetch) {}
+/** The Framework pages search lists without a query, in whichever version is current. */
+const frameworkEntryPoints = new Set(["structure", "screen", "layout", "framework_runtime"]);
 
-  async search(query?: string): Promise<ScreenDoc[]> {
-    const catalog = await this.catalog();
-    if (!query) {
-      return catalog.filter(
-        ({ id }) =>
-          id === localDoc.id ||
-          id === "trmnl:private-plugins/templates" ||
-          id === "trmnl:private-plugins/templates-advanced" ||
-          /^(framework:[^:]+:(structure|screen|layout|framework_runtime))$/.test(id),
+const fail = (message: string) => Effect.fail(new DocsError({ message }));
+
+const make = Effect.gen(function* () {
+  const http = yield* HttpClient.HttpClient;
+
+  const fetchText = (url: string, content: "html" | "markdown", maximumBytes: number) => {
+    const types = content === "html" ? ["text/html"] : ["text/markdown", "text/plain"];
+    return http
+      .execute(HttpClientRequest.get(url).pipe(HttpClientRequest.accept(types.join(", "))))
+      .pipe(
+        Effect.flatMap((response) =>
+          download(response, (type) => types.includes(type), maximumBytes),
+        ),
+        Effect.map(({ body }) => new TextDecoder().decode(body)),
+        Effect.catchTags({
+          Unacceptable: ({ reason }) =>
+            fail(
+              reason === "type"
+                ? "TRMNL documentation returned an unexpected content type."
+                : "TRMNL documentation exceeds the size limit.",
+            ),
+          HttpClientError: ({ reason }) =>
+            reason._tag === "StatusCodeError"
+              ? fail(`TRMNL documentation request failed (HTTP ${reason.response.status}).`)
+              : fail("Unable to reach TRMNL documentation."),
+        }),
+        Effect.timeoutOrElse({
+          duration: "15 seconds",
+          orElse: () => fail("TRMNL documentation request timed out."),
+        }),
       );
-    }
+  };
 
-    const terms = query.toLocaleLowerCase().split(/\s+/);
-    return catalog.filter((doc) => {
-      const text = `${doc.id} ${doc.title} ${doc.summary}`.toLocaleLowerCase();
-      return terms.every((term) => text.includes(term));
-    });
-  }
-
-  async read(id: string): Promise<{ doc: ScreenDoc; markdown: string }> {
-    if (id === localDoc.id) {
-      return {
-        doc: localDoc,
-        markdown: await readFile(new URL("../docs/screen-authoring.md", import.meta.url), "utf8"),
-      };
-    }
-
-    if (
-      !/^(?:trmnl:[a-z0-9/_-]+|framework:\d+\.\d+:[a-z0-9_-]+|framework-example:[a-z0-9_-]+)$/.test(
-        id,
-      )
-    ) {
-      throw new Error(`Unknown screen documentation ID: ${id}`);
-    }
-
-    const doc = (await this.catalog()).find((candidate) => candidate.id === id);
-    if (!doc) throw new Error(`Unknown screen documentation ID: ${id}`);
-
-    return {
-      doc,
-      markdown: await this.fetchText(new URL(doc.url), "markdown", 256 * 1024),
-    };
-  }
-
-  private async catalog(): Promise<ScreenDoc[]> {
-    const frameworkPage = await this.fetchText(
-      new URL("https://trmnl.com/framework"),
-      "html",
-      1024 * 1024,
-    );
+  // Every URL below is a constant, or one built from a slug of [a-z0-9_-], so it stays on TRMNL.
+  const build = Effect.gen(function* () {
+    const frameworkPage = yield* fetchText("https://trmnl.com/framework", "html", 1024 * 1024);
     const versions = [...frameworkPage.matchAll(/\/framework\/docs\/(\d+\.\d+)/g)].map(
       (match) => match[1]!,
     );
     const collator = new Intl.Collator("en", { numeric: true });
     const version = versions.sort((left, right) => collator.compare(left, right)).at(-1);
-    if (!version) throw new Error("TRMNL Framework documentation version was not found.");
+    if (!version) return yield* fail("TRMNL Framework documentation version was not found.");
 
-    const [trmnlIndex, frameworkIndex, examplesIndex] = await Promise.all([
-      this.fetchText(new URL("https://docs.trmnl.com/go/llms.txt"), "markdown", 256 * 1024),
-      this.fetchText(new URL(`https://trmnl.com/framework/docs/${version}`), "html", 1024 * 1024),
-      this.fetchText(new URL("https://trmnl.com/framework/examples"), "html", 1024 * 1024),
-    ]);
+    const [trmnlIndex, frameworkIndex, examplesIndex] = yield* Effect.all(
+      [
+        fetchText("https://docs.trmnl.com/go/llms.txt", "markdown", 256 * 1024),
+        fetchText(`https://trmnl.com/framework/docs/${version}`, "html", 1024 * 1024),
+        fetchText("https://trmnl.com/framework/examples", "html", 1024 * 1024),
+      ],
+      { concurrency: "unbounded" },
+    );
 
     const trmnl = [
       ...trmnlIndex.matchAll(
         /^- \[([^\]]+)\]\(https:\/\/docs\.trmnl\.com\/go\/([a-z0-9/_-]+)\.md\):\s*(.+)$/gm,
       ),
     ]
-      .filter((match) => trmnlPaths.has(match[2]!))
+      .filter((match) => trmnlPages.has(match[2]!))
       .map((match): ScreenDoc => ({
         id: `trmnl:${match[2]}`,
         title: match[1]!,
@@ -124,78 +128,56 @@ export class ScreenDocs {
       }),
     );
 
-    return [localDoc, ...trmnl, ...framework, ...examples];
-  }
-
-  private async fetchText(
-    url: URL,
-    content: "html" | "markdown",
-    maximumBytes: number,
-  ): Promise<string> {
-    if (!isAllowed(url)) throw new Error("Unsafe TRMNL documentation URL.");
-
-    let response: Response;
-    try {
-      response = await this.fetcher(url, {
-        headers: {
-          Accept: content === "html" ? "text/html" : "text/markdown, text/plain",
-        },
-        redirect: "manual",
-        signal: AbortSignal.timeout(15_000),
-      });
-    } catch (error) {
-      throw new Error(
-        error instanceof Error && error.name === "TimeoutError"
-          ? "TRMNL documentation request timed out."
-          : "Unable to reach TRMNL documentation.",
-      );
-    }
-
-    if (!response.ok) {
-      throw new Error(`TRMNL documentation request failed (HTTP ${response.status}).`);
-    }
-
-    const type = response.headers.get("content-type")?.split(";", 1)[0]?.trim();
-    const allowedTypes =
-      content === "html" ? new Set(["text/html"]) : new Set(["text/markdown", "text/plain"]);
-    if (!type || !allowedTypes.has(type)) {
-      throw new Error("TRMNL documentation returned an unexpected content type.");
-    }
-
-    const declaredSize = Number(response.headers.get("content-length"));
-    if (Number.isFinite(declaredSize) && declaredSize > maximumBytes) {
-      throw new Error("TRMNL documentation exceeds the size limit.");
-    }
-
-    const bytes = Buffer.from(await response.arrayBuffer());
-    if (bytes.byteLength > maximumBytes) {
-      throw new Error("TRMNL documentation exceeds the size limit.");
-    }
-    return bytes.toString("utf8");
-  }
-}
-
-function isAllowed(url: URL): boolean {
-  if (
-    url.protocol !== "https:" ||
-    url.port ||
-    url.username ||
-    url.password ||
-    url.search ||
-    url.hash
-  ) {
-    return false;
-  }
-
-  return (
-    (url.hostname === "docs.trmnl.com" &&
-      (url.pathname === "/go/llms.txt" || /^\/go\/[a-z0-9/_-]+\.md$/.test(url.pathname))) ||
-    (url.hostname === "trmnl.com" &&
-      (url.pathname === "/framework" ||
-        url.pathname === "/framework/examples" ||
-        /^\/framework\/docs\/\d+\.\d+(?:\/[a-z0-9_-]+\.md)?$/.test(url.pathname) ||
-        /^\/framework\/examples\/[a-z0-9_-]+\.md$/.test(url.pathname)))
+    const all = [localDoc, ...trmnl, ...framework, ...examples];
+    const entryPoints = new Set([
+      localDoc.id,
+      ...[...trmnlPages].filter(([, listed]) => listed).map(([path]) => `trmnl:${path}`),
+      ...[...frameworkEntryPoints].map((slug) => `framework:${version}:${slug}`),
+    ]);
+    return { all, entryPoints: all.filter(({ id }) => entryPoints.has(id)) };
+  });
+  // An hour of searches and reads share one catalog; a failed build is retried by the next one.
+  const catalog = yield* Effect.cachedWithTTL(build, (exit) =>
+    Exit.isSuccess(exit) ? "1 hour" : 0,
   );
+
+  const search = ({ query }: { readonly query?: string }) =>
+    Effect.map(catalog, ({ all, entryPoints }) => {
+      if (!query) return { docs: entryPoints };
+      const terms = query.toLocaleLowerCase().split(/\s+/);
+      return {
+        docs: all.filter((doc) => {
+          const text = `${doc.id} ${doc.title} ${doc.summary}`.toLocaleLowerCase();
+          return terms.every((term) => text.includes(term));
+        }),
+      };
+    });
+
+  const read = Effect.fn("ScreenDocs.read")(function* ({
+    doc_id: id,
+  }: {
+    readonly doc_id: string;
+  }) {
+    if (id === localDoc.id) {
+      const markdown = yield* Effect.tryPromise({
+        try: () => readFile(new URL("../docs/screen-authoring.md", import.meta.url), "utf8"),
+        catch: () => new DocsError({ message: "The screen authoring guide is unavailable." }),
+      });
+      return { doc: localDoc, markdown };
+    }
+
+    const doc = (yield* catalog).all.find((candidate) => candidate.id === id);
+    if (!doc) return yield* fail(`Unknown screen documentation ID: ${id}`);
+
+    return { doc, markdown: yield* fetchText(doc.url, "markdown", 256 * 1024) };
+  });
+
+  return { search, read };
+});
+
+/** The authoring guide, and the official TRMNL documentation it links to. */
+export class ScreenDocs extends Context.Service<ScreenDocs>()("terminus-mcp/ScreenDocs", { make }) {
+  static readonly layer = Layer.effect(ScreenDocs, ScreenDocs.make);
 }
 
 function uniqueMatches(input: string, expression: RegExp): string[] {

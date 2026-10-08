@@ -34,20 +34,21 @@
     "start": "node dist/index.mjs",
     "start:http": "node dist/http.mjs",
     "test": "vp test run",
-    "verify:live": "vp pack && tsx test/live.ts"
+    "verify:live": "tsx test/live.ts"
   },
   "dependencies": {
-    "@modelcontextprotocol/node": "2.1.1",
-    "@modelcontextprotocol/server": "2.3.1",
-    "zod": "4.6.5"
+    "@effect/platform-node": "4.0.2",
+    "@gjermundgaraba/effect-actions": "0.11.0",
+    "effect": "4.0.2"
   },
   "devDependencies": {
-    "@modelcontextprotocol/client": "2.3.1",
+    "@effect/vitest": "4.0.2",
     "@types/node": "^24.0.0",
     "tsx": "4.23.15",
     "typescript": "7.0.2",
     "vite": "catalog:",
-    "vite-plus": "catalog:"
+    "vite-plus": "catalog:",
+    "vitest": "catalog:"
   },
   "devEngines": {
     "packageManager": {

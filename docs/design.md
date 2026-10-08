@@ -18,7 +18,7 @@ References:
 - [Terminus API](https://github.com/usetrmnl/terminus/blob/0.67.0/doc/api.adoc)
 - [Terminus routes](https://github.com/usetrmnl/terminus/blob/0.67.0/config/routes.rb)
 - [Terminus HTML sanitizer](https://github.com/usetrmnl/terminus/blob/0.67.0/config/sanitize.yml)
-- [MCP TypeScript SDK v2](https://github.com/modelcontextprotocol/typescript-sdk)
+- [effect-actions](https://github.com/gjermundgaraba/effect-actions)
 
 ## Goals
 
@@ -30,8 +30,9 @@ An agent should be able to:
 4. Create or replace a screen from complete HTML and CSS.
 5. Create or replace an ordered playlist and assign it to a device.
 
-The server should be safe to run as a local stdio process or an internal
-Streamable HTTP sidecar with credentials provided by its runtime.
+The server should be safe to run as a local stdio process or a Streamable HTTP
+service on an access-controlled network, with Terminus credentials provided by
+its runtime.
 
 ## API coverage
 
@@ -65,10 +66,12 @@ Streamable HTTP sidecar with credentials provided by its runtime.
 | `save_playlist`   | Create or replace a playlist and its complete ordered screen list.        |
 | `assign_playlist` | Set only the `playlist_id` of a device.                                   |
 
-Tool results should return structured data as well as concise text suitable
-for an agent. Mutating tools must have accurate MCP read-only/destructive
-annotations, but those annotations are advisory and are not a security
-boundary.
+Tool results return structured data, with its JSON as their text.
+`get_screen_image` also returns the rendered image as an image block, so a
+multimodal agent sees it. A Terminus failure is a declared `TerminusError`, and
+a documentation failure a `DocsError`, each with a message for the agent.
+Mutating tools must have accurate MCP read-only/destructive annotations, but
+those annotations are advisory and are not a security boundary.
 
 ## Explicit exclusions
 
@@ -119,7 +122,8 @@ Terminus publishes supported server API endpoints for them.
 
 The MCP process receives the Terminus URL, login, and password through its
 environment. It exchanges them for a short-lived access token and refresh
-token, keeps tokens in memory, and refreshes them internally.
+token, keeps tokens in memory, and refreshes them internally. Each Terminus
+call has 60 seconds, including any token renewal and its retry.
 
 The server must:
 
@@ -133,14 +137,32 @@ Terminus currently has broad account permissions rather than scoped API
 service accounts. The MCP tool surface is therefore the effective
 least-privilege boundary.
 
-The native HTTP endpoint has no application-level authentication. It must bind
-to loopback or an access-controlled container network and must not be published
-directly. Host and Origin validation remain enabled for either placement.
+### MCP callers
 
-Documentation tools accept server-issued IDs rather than arbitrary URLs.
-Remote Markdown is fetched only over HTTPS from exact TRMNL origins and
-allowlisted paths, without Terminus credentials, redirects, or caller-supplied
-query parameters. Responses have content-type, timeout, and size limits.
+The server does not authenticate its callers. Over stdio, the caller is the
+host that launched the process. The HTTP endpoint has no application-level
+authentication and must stay on an access-controlled internal network.
+
+The endpoint refuses a request whose `Origin` is not one of the exact origins in
+`MCP_ALLOWED_ORIGINS`, none by default, so a browser page elsewhere cannot call
+it.
+
+`TERMINUS_URL` may not contain credentials; only its origin and path are used, so
+they would otherwise be dropped silently.
+
+Documentation tools accept server-issued IDs rather than arbitrary URLs. Every
+documentation URL is a constant or is built from a slug of `[a-z0-9_-]`, so
+Markdown is fetched only over HTTPS from TRMNL's origins, without Terminus
+credentials, redirects, or caller-supplied query parameters. Responses have
+content-type, timeout, and size limits. The catalog is cached for an hour.
+Search needs TRMNL reachable, since the catalog is built from its pages, but
+`read_screen_doc` reads the authoring guide without it.
+
+Every download, a document or a screen image, stops reading once it passes its
+size limit, whether or not it declares a `Content-Length`.
+
+No outbound request follows a redirect: the process's one HTTP client answers
+with the redirect itself.
 
 ### Device data
 

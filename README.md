@@ -3,9 +3,9 @@
 An MCP server for agents that create and publish content to a
 [Terminus](https://github.com/usetrmnl/terminus) instance.
 
-The project targets version 2 of the official
-[Model Context Protocol TypeScript SDK](https://github.com/modelcontextprotocol/typescript-sdk)
-and Node.js 24.2 or newer.
+The tools are [effect-actions](https://github.com/gjermundgaraba/effect-actions)
+actions on [Effect](https://effect.website) v4, served over stdio or Streamable
+HTTP. It needs Node.js 24.11 or newer.
 
 ## Status
 
@@ -55,8 +55,8 @@ docker run --rm -p 127.0.0.1:8002:8002 \
   ghcr.io/gjermundgaraba/terminus-mcp:latest
 ```
 
-See [Configuration](#configuration) for the environment variables and the
-note on credential handling.
+See [Configuration](#configuration) for the environment variables, the note on
+credential handling, and the network the HTTP endpoint needs.
 
 ## Development
 
@@ -75,10 +75,10 @@ Run the development server over stdio:
 vp run dev
 ```
 
-Or run its native Streamable HTTP endpoint:
+Or run its Streamable HTTP endpoint:
 
 ```sh
-MCP_HOST=0.0.0.0 MCP_PORT=8002 vp run dev:http
+vp run dev:http
 ```
 
 Build and run the compiled server:
@@ -87,7 +87,7 @@ Build and run the compiled server:
 vp pack
 vp run start
 # or
-MCP_HOST=0.0.0.0 MCP_PORT=8002 vp run start:http
+MCP_HOST=0.0.0.0 vp run start:http
 ```
 
 Standard output is reserved for MCP messages. Diagnostics use standard error.
@@ -100,25 +100,34 @@ The MCP host must provide:
 - `TERMINUS_LOGIN`: Login email for the Terminus account.
 - `TERMINUS_PASSWORD`: Login password for the Terminus account.
 
+`TERMINUS_URL` must use HTTP or HTTPS and must not contain credentials.
+
 The HTTP entrypoint additionally accepts:
 
 - `MCP_HOST`: Listen address; defaults to `127.0.0.1`.
-- `MCP_PORT`: Listen port; defaults to `8002`.
-- `MCP_ALLOWED_HOSTS`: Optional comma-separated additional `Host` and `Origin`
-  hostnames. `terminus-mcp` and loopback names are allowed by default.
+- `MCP_PORT`: Listen port from 1 to 65535; defaults to `8002`.
+- `MCP_ALLOWED_ORIGINS`: Optional comma-separated exact origins, such as
+  `https://ui.example.com`, a browser may call `/mcp` from. A request carrying
+  any other `Origin` is refused with 403; one without `Origin`, as MCP clients
+  outside a browser send, is served. An entry that is not an exact origin, such
+  as one with a trailing slash or a path, stops the server at startup.
 
 Credentials will never be accepted as MCP tool arguments, returned in tool
 results, or intentionally written to logs. Inject them with the MCP host's
 secret-management facility instead of committing them to its configuration.
 
-For remote MCP clients, use `http://<host>:8002/mcp`. `/healthz` provides a
-container health check. The HTTP endpoint has no application-level
-authentication and must remain on an access-controlled internal network.
+For remote MCP clients, use `http://<host>:8002/mcp`. It speaks MCP
+`2026-07-28` only; a host on an earlier revision runs the stdio server, which
+also speaks `2025-11-25` and `2025-06-18`. `/healthz` provides a container
+health check. The HTTP endpoint has no application-level authentication and
+must remain on an access-controlled internal network.
 
 ## Verification
 
-`vp run ready` runs formatting, linting, strict type checks, protocol-level
-tests through the official MCP client, and a production build.
+`vp run ready` runs formatting, linting, strict type checks, the tests, and a
+production build. The tests call the tools through an in-memory MCP client
+against a fake Terminus, and build the server to call it over stdio as an MCP
+host would.
 
 To verify against a configured Terminus instance:
 
@@ -126,9 +135,10 @@ To verify against a configured Terminus instance:
 vp run verify:live
 ```
 
-The live check exercises all ten tools. It creates a temporary screen and
-playlist, assigns the device's existing playlist back to itself, and deletes
-the temporary objects before exiting.
+The live check calls all ten actions in process against the Terminus in
+`TERMINUS_URL`, `TERMINUS_LOGIN` and `TERMINUS_PASSWORD`. It creates a
+temporary screen and playlist, assigns the device's existing playlist back to
+itself, and deletes the temporary objects before exiting.
 
 ## License
 

@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 
-import { serveStdio } from "@modelcontextprotocol/server/stdio";
+import { NodeRuntime, NodeStdio } from "@effect/platform-node";
+import { Effect, Layer } from "effect";
+import * as ActionCli from "@gjermundgaraba/effect-actions/ActionCli";
+import * as ActionMcp from "@gjermundgaraba/effect-actions/ActionMcp";
 
-import { createServer } from "./server.js";
-import { TerminusClient } from "./terminus/client.js";
+import { httpClientLayer } from "./http-client.js";
+import { actions, server, services } from "./server.js";
 
-const client = TerminusClient.fromEnv();
-
-void serveStdio(() => createServer(client), {
-  onerror: (error) => console.error(error.message),
-});
+ActionMcp.runStdio(actions, server).pipe(
+  Effect.provide([NodeStdio.layer, Layer.provide(services, httpClientLayer)]),
+  ActionCli.logToStderr,
+  NodeRuntime.runMain,
+);

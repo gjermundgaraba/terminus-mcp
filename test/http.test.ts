@@ -1,56 +1,52 @@
-import assert from "node:assert/strict";
-import { once } from "node:events";
-import type { AddressInfo } from "node:net";
-import { test } from "vite-plus/test";
+import { assert, it } from "@effect/vitest";
+import { Effect, Layer } from "effect";
+import { HttpClient } from "effect/http";
 
-import { Client, StreamableHTTPClientTransport } from "@modelcontextprotocol/client";
+import { send, serve } from "./fake.js";
 
-import { startHttpServer } from "../src/http.js";
+const noTerminus = () => assert.fail("No Terminus request expected");
 
-test("serves MCP over HTTP with health and origin guards", async () => {
-  const server = startHttpServer({
-    TERMINUS_URL: "https://terminus.example.test",
-    TERMINUS_LOGIN: "agent@example.test",
-    TERMINUS_PASSWORD: "secret",
-    MCP_HOST: "127.0.0.1",
-    MCP_PORT: "0",
-  });
-  await once(server, "listening");
+it.effect("serves a health check beside the MCP endpoint", () =>
+  Effect.gen(function* () {
+    const health = yield* HttpClient.get("/healthz");
+    assert.strictEqual(health.status, 200);
+    assert.deepStrictEqual(yield* health.json, { status: "ok" });
 
-  const { port } = server.address() as AddressInfo;
-  const baseUrl = `http://127.0.0.1:${port}`;
-  const client = new Client({ name: "terminus-mcp-http-test", version: "1.0.0" });
+    assert.strictEqual((yield* send("tools/list")).status, 200);
+  }).pipe(Effect.provide(serve(noTerminus))),
+);
 
-  try {
-    const health = await fetch(`${baseUrl}/healthz`);
-    assert.equal(health.status, 200);
-    assert.deepEqual(await health.json(), { status: "ok" });
+it.effect("admits only the configured browser origins", () =>
+  Effect.gen(function* () {
+    const listTools = (origin: string) =>
+      Effect.map(send("tools/list", undefined, { origin }), (response) => response.status);
 
-    const rejected = await fetch(`${baseUrl}/healthz`, {
-      headers: { Origin: "https://attacker.test" },
-    });
-    assert.equal(rejected.status, 403);
+    assert.strictEqual(yield* listTools("https://attacker.test"), 403);
+    assert.strictEqual(yield* listTools("https://ui.example.test"), 200);
+    assert.strictEqual(yield* listTools("https://ui.example.test:8443"), 403);
+  }).pipe(
+    Effect.provide(
+      serve(noTerminus, { MCP_ALLOWED_ORIGINS: "https://ui.example.test, https://other.test" }),
+    ),
+  ),
+);
 
-    await client.connect(new StreamableHTTPClientTransport(new URL(`${baseUrl}/mcp`)));
-    const guide = await client.callTool({
-      name: "read_screen_doc",
-      arguments: { doc_id: "terminus:screen-authoring" },
-    });
-    assert.match(JSON.stringify(guide), /complete HTML document/);
-  } finally {
-    await client.close().catch(() => undefined);
-    await new Promise<void>((resolveClose, rejectClose) =>
-      server.close((error) => (error ? rejectClose(error) : resolveClose())),
+it.effect("refuses to start on an unusable URL setting", () =>
+  Effect.gen(function* () {
+    const start = (environment: Record<string, string>) =>
+      Effect.flip(Layer.build(serve(noTerminus, environment))).pipe(Effect.map(String));
+
+    assert.match(
+      yield* start({ TERMINUS_URL: "ftp://terminus.example.test" }),
+      /TERMINUS_URL must use HTTP or HTTPS/,
     );
-  }
-});
-
-test("rejects an invalid HTTP port", () => {
-  assert.throws(
-    () =>
-      startHttpServer({
-        MCP_PORT: "70000",
-      }),
-    /MCP_PORT/,
-  );
-});
+    assert.match(
+      yield* start({ TERMINUS_URL: "https://user:pass@terminus.example.test" }),
+      /TERMINUS_URL must not contain credentials/,
+    );
+    assert.match(
+      yield* start({ MCP_ALLOWED_ORIGINS: "https://ui.example.test, https://other.test/" }),
+      /MCP_ALLOWED_ORIGINS entries must be exact origins/,
+    );
+  }).pipe(Effect.scoped),
+);

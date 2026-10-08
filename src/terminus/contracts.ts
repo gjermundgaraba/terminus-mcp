@@ -1,155 +1,183 @@
-import { z } from "zod";
+import { Effect, Option, Schema, SchemaTransformation } from "effect";
 
-const positiveId = z.number().int().positive();
-const nullableString = z.string().nullable();
-const nullableNumber = z.number().nullable();
-const modelCssSchema = z
-  .object({
-    classes: z.record(z.string(), z.string()).catch({}),
-    variables: z.array(z.tuple([z.string(), z.string()])).catch([]),
-  })
-  .catch({ classes: {}, variables: [] });
+import { AUTHORING_GUIDE_ID } from "../docs.js";
 
-export const safeDeviceSchema = z.object({
-  id: positiveId,
-  model_id: positiveId,
-  playlist_id: positiveId.nullable(),
-  label: z.string(),
-  firmware_version: nullableString,
-  wifi_band: nullableNumber,
-  wifi_signal: nullableNumber,
-  battery_charge: nullableNumber,
-  battery_voltage: nullableNumber,
-  charging: z.boolean(),
-  refresh_rate: z.number().int().positive(),
-  image_cached: z.boolean(),
-  synced_at: nullableString,
-  width: z.number().int().nonnegative(),
-  height: z.number().int().nonnegative(),
+export class TerminusError extends Schema.TaggedError<TerminusError>()("TerminusError", {
+  message: Schema.String,
+}) {}
+
+export const PositiveInt = Schema.Int.check(Schema.isGreaterThan(0));
+const NonNegativeInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
+const NullableString = Schema.NullOr(Schema.String);
+const NullableNumber = Schema.NullOr(Schema.Finite);
+
+/** A model's CSS, or none when Terminus has none or sends it in an unexpected shape. */
+const ModelCss = Schema.Struct({
+  classes: Schema.Record(Schema.String, Schema.String),
+  variables: Schema.Array(Schema.Tuple([Schema.String, Schema.String])),
+}).pipe(Schema.catchDecoding(() => Effect.succeed(Option.some({ classes: {}, variables: [] }))));
+
+export const SafeDevice = Schema.Struct({
+  id: PositiveInt,
+  model_id: PositiveInt,
+  playlist_id: Schema.NullOr(PositiveInt),
+  label: Schema.String,
+  firmware_version: NullableString,
+  wifi_band: NullableNumber,
+  wifi_signal: NullableNumber,
+  battery_charge: NullableNumber,
+  battery_voltage: NullableNumber,
+  charging: Schema.Boolean,
+  refresh_rate: PositiveInt,
+  image_cached: Schema.Boolean,
+  synced_at: NullableString,
+  width: NonNegativeInt,
+  height: NonNegativeInt,
 });
 
-export const modelSchema = z.object({
-  id: positiveId,
-  default_palette_id: positiveId.nullable(),
-  name: z.string(),
-  label: z.string(),
-  description: nullableString,
-  kind: z.string(),
-  mime_type: z.string(),
-  colors: z.number().int().positive(),
-  bit_depth: z.number().int().positive(),
-  rotation: z.number().int(),
-  offset_x: z.number().int(),
-  offset_y: z.number().int(),
-  scale_factor: z.number().positive(),
-  css: modelCssSchema,
-  width: z.number().int().nonnegative(),
-  height: z.number().int().nonnegative(),
-  created_at: z.string(),
-  updated_at: z.string(),
+export const Model = Schema.Struct({
+  id: PositiveInt,
+  default_palette_id: Schema.NullOr(PositiveInt),
+  name: Schema.String,
+  label: Schema.String,
+  description: NullableString,
+  kind: Schema.String,
+  mime_type: Schema.String,
+  colors: PositiveInt,
+  bit_depth: PositiveInt,
+  rotation: Schema.Int,
+  offset_x: Schema.Int,
+  offset_y: Schema.Int,
+  scale_factor: Schema.Finite.check(Schema.isGreaterThan(0)),
+  css: ModelCss,
+  width: NonNegativeInt,
+  height: NonNegativeInt,
+  created_at: Schema.String,
+  updated_at: Schema.String,
 });
 
-export const screenSchema = z.object({
-  id: positiveId,
-  model_id: positiveId,
-  label: z.string(),
-  name: z.string(),
-  created_at: z.string(),
-  updated_at: z.string(),
-  filename: z.string(),
-  mime_type: z.string(),
-  bit_depth: z.number().int().positive(),
-  width: z.number().int().positive(),
-  height: z.number().int().positive(),
-  size: z.number().int().nonnegative(),
-  uri: z.string(),
+export const Screen = Schema.Struct({
+  id: PositiveInt,
+  model_id: PositiveInt,
+  label: Schema.String,
+  name: Schema.String,
+  created_at: Schema.String,
+  updated_at: Schema.String,
+  filename: Schema.String,
+  mime_type: Schema.String,
+  bit_depth: PositiveInt,
+  width: PositiveInt,
+  height: PositiveInt,
+  size: NonNegativeInt,
+  uri: Schema.String,
 });
 
-const playlistItemSchema = z.object({
-  id: positiveId,
-  screen_id: positiveId,
-  position: z.number().int().positive(),
-  created_at: z.string(),
-  updated_at: z.string(),
+const PlaylistItem = Schema.Struct({
+  id: PositiveInt,
+  screen_id: PositiveInt,
+  position: PositiveInt,
+  created_at: Schema.String,
+  updated_at: Schema.String,
 });
 
-export const playlistSchema = z.object({
-  id: positiveId,
-  name: z.string(),
-  label: z.string(),
-  current_item_id: positiveId.nullable(),
-  mode: z.enum(["automatic", "manual"]),
-  created_at: z.string(),
-  updated_at: z.string(),
-  items: z.array(playlistItemSchema),
+const PlaylistMode = Schema.Literals(["automatic", "manual"]);
+
+export const Playlist = Schema.Struct({
+  id: PositiveInt,
+  name: Schema.String,
+  label: Schema.String,
+  current_item_id: Schema.NullOr(PositiveInt),
+  mode: PlaylistMode,
+  created_at: Schema.String,
+  updated_at: Schema.String,
+  items: Schema.Array(PlaylistItem),
 });
 
-export const authSchema = z.object({
-  access_token: z.string().min(1),
-  refresh_token: z.string().min(1),
+export const Tokens = Schema.Struct({
+  access_token: Schema.NonEmptyString,
+  refresh_token: Schema.NonEmptyString,
 });
 
-const shortText = z.string().trim().min(1).max(255);
-const html = z.string().min(1).max(1_000_000);
-const screenMode = z
-  .literal("dither")
-  .optional()
-  .describe("Use dither for photos or image-heavy content; omit it for text and UI.");
-
-export const screenInputSchema = z.object({
-  model_id: positiveId,
-  label: shortText,
-  name: shortText,
-  html,
-  playlist_id: positiveId.optional(),
-  mode: screenMode,
+export const FrameworkContext = Schema.Struct({
+  css_url: Schema.String,
+  javascript_url: Schema.String,
+  screen_classes: Schema.Array(Schema.String),
+  screen_variables: Schema.Record(Schema.String, Schema.String),
+  authoring_guide_id: Schema.Literal(AUTHORING_GUIDE_ID),
 });
 
-export const screenUpdateSchema = z
-  .object({
-    screen_id: positiveId,
-    html,
-    label: shortText.optional(),
-    mode: screenMode,
-  })
-  .strict();
-
-export const playlistInputSchema = z.object({
-  playlist_id: positiveId.optional(),
-  name: shortText,
-  label: shortText,
-  mode: z.enum(["automatic", "manual"]).optional(),
-  screen_ids: z.array(positiveId).max(1_000),
+export const DisplayContext = Schema.Struct({
+  device: SafeDevice,
+  model: Model,
+  playlist: Schema.NullOr(Playlist),
+  framework: FrameworkContext,
 });
 
-export const listOf = <T extends z.ZodType>(schema: T) => z.object({ data: z.array(schema) });
-export const oneOf = <T extends z.ZodType>(schema: T) => z.object({ data: schema });
+export const SavedPlaylist = Schema.Struct({
+  action: Schema.Literals(["created", "updated"]),
+  playlist: Playlist,
+});
 
-export type Model = z.infer<typeof modelSchema>;
-export type Screen = z.infer<typeof screenSchema>;
-export type Playlist = z.infer<typeof playlistSchema>;
-export type SafeDevice = z.infer<typeof safeDeviceSchema>;
+const shortText = [Schema.isMinLength(1), Schema.isMaxLength(255)] as const;
 
-export interface DisplayContext {
-  device: SafeDevice;
-  model: Model;
-  playlist: Playlist | null;
-  framework: FrameworkContext;
-}
+/** Trimmed, and bounded on both sides, so the tool's input schema lists the bounds too. */
+export const ShortText = Schema.String.check(...shortText).pipe(
+  Schema.decodeTo(Schema.Trimmed.check(...shortText), SchemaTransformation.trim()),
+);
+const Html = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(1_000_000));
+const ScreenMode = Schema.optionalKey(
+  Schema.Literal("dither").annotate({
+    description: "Use dither for photos or image-heavy content; omit it for text and UI.",
+  }),
+);
 
-export interface FrameworkContext {
-  css_url: string;
-  javascript_url: string;
-  screen_classes: string[];
-  screen_variables: Record<string, string>;
-  authoring_guide_id: "terminus:screen-authoring";
-}
+export const DisplayQuery = Schema.Struct({ device_id: Schema.optionalKey(PositiveInt) });
 
-export type ScreenInput = z.infer<typeof screenInputSchema>;
-export type ScreenUpdate = z.infer<typeof screenUpdateSchema>;
-export type PlaylistInput = z.infer<typeof playlistInputSchema>;
+export const ScreenRef = Schema.Struct({ screen_id: PositiveInt });
 
-export interface SavedPlaylist {
-  action: "created" | "updated";
-  playlist: Playlist;
-}
+export const Assignment = Schema.Struct({ device_id: PositiveInt, playlist_id: PositiveInt });
+
+export const ScreenFilters = Schema.Struct({
+  model_id: Schema.optionalKey(PositiveInt),
+  query: Schema.optionalKey(ShortText),
+});
+
+export const ScreenInput = Schema.Struct({
+  model_id: PositiveInt,
+  label: ShortText,
+  name: ShortText,
+  html: Html,
+  playlist_id: Schema.optionalKey(PositiveInt),
+  mode: ScreenMode,
+});
+
+export const ScreenUpdate = Schema.Struct({
+  screen_id: PositiveInt,
+  html: Html,
+  label: Schema.optionalKey(ShortText),
+  mode: ScreenMode,
+});
+
+export const PlaylistInput = Schema.Struct({
+  playlist_id: Schema.optionalKey(PositiveInt),
+  name: ShortText,
+  label: ShortText,
+  mode: Schema.optionalKey(PlaylistMode),
+  screen_ids: Schema.Array(PositiveInt).check(Schema.isMaxLength(1_000)),
+});
+
+export const ListOf = <S extends Schema.Top>(item: S) =>
+  Schema.Struct({ data: Schema.Array(item) });
+export const OneOf = <S extends Schema.Top>(item: S) => Schema.Struct({ data: item });
+
+export type Model = typeof Model.Type;
+export type Playlist = typeof Playlist.Type;
+export type SafeDevice = typeof SafeDevice.Type;
+export type FrameworkContext = typeof FrameworkContext.Type;
+export type DisplayQuery = typeof DisplayQuery.Type;
+export type ScreenRef = typeof ScreenRef.Type;
+export type Assignment = typeof Assignment.Type;
+export type ScreenFilters = typeof ScreenFilters.Type;
+export type ScreenInput = typeof ScreenInput.Type;
+export type ScreenUpdate = typeof ScreenUpdate.Type;
+export type PlaylistInput = typeof PlaylistInput.Type;

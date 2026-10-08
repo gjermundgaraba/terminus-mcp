@@ -1,7 +1,6 @@
 allowBuilds:
   esbuild: true
 overrides:
-  "@hono/node-server": 2.0.12
   vite@*: "catalog:"
 peerDependencyRules:
   allowAny:
@@ -11,3 +10,11 @@ peerDependencyRules:
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@1.1.0
   vite-plus: 1.1.0
+  vitest: 5.0.3
+# These releases are newer than pnpm's default one-day release age; drop them once they are not.
+minimumReleaseAgeExclude:
+  - "@effect/platform-node-shared@4.0.2"
+  - "@effect/platform-node@4.0.2"
+  - "@effect/vitest@4.0.2"
+  - "@gjermundgaraba/effect-actions@0.11.0"
+  - effect@4.0.2

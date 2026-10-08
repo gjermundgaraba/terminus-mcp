@@ -1,211 +1,60 @@
-import assert from "node:assert/strict";
-import { test } from "vite-plus/test";
+import { assert, it } from "@effect/vitest";
+import { Effect, Layer, Schema } from "effect";
+import * as Testing from "@gjermundgaraba/effect-actions/Testing";
 
-import { Client } from "@modelcontextprotocol/client";
-import { InMemoryTransport } from "@modelcontextprotocol/server";
+import { ScreenDocs } from "../src/docs.js";
+import { Actions } from "../src/server.js";
+import { Terminus } from "../src/terminus/client.js";
+import {
+  configured,
+  device,
+  docsFetches,
+  fakeHttp,
+  json,
+  model,
+  playlist,
+  png,
+  screen,
+  send,
+  serve,
+  terminus,
+  trmnlDocs,
+} from "./fake.js";
 
-import { ScreenDocs, type ScreenDoc } from "../src/docs.js";
-import { createServer } from "../src/server.js";
-import { TerminusClient } from "../src/terminus/client.js";
-import type { DisplayContext } from "../src/terminus/contracts.js";
+interface Tool {
+  readonly name: string;
+  readonly inputSchema: unknown;
+  readonly annotations: Record<string, unknown>;
+}
 
-const model = {
-  id: 1,
-  default_palette_id: null,
-  name: "trmnl-og-1bit",
-  label: "TRMNL OG (1-bit)",
-  description: null,
-  kind: "display",
-  mime_type: "image/png",
-  colors: 2,
-  bit_depth: 1,
-  rotation: 0,
-  offset_x: 0,
-  offset_y: 0,
-  scale_factor: 1,
-  css: {
-    classes: {
-      size: "screen--md",
-      device: "screen--ogv2",
-      density: "screen--density-1x",
-    },
-    variables: [
-      ["--screen-w", "800px"],
-      ["--screen-h", "480px"],
-    ],
-  },
-  width: 800,
-  height: 480,
-  created_at: "2026-01-01T00:00:00Z",
-  updated_at: "2026-01-01T00:00:00Z",
-};
+interface ToolResult {
+  readonly isError: boolean;
+  readonly content: ReadonlyArray<{ readonly type: string; readonly data?: string }>;
+  readonly structuredContent?: unknown;
+}
 
-const screen = {
-  id: 10,
-  model_id: 1,
-  label: "Test screen",
-  name: "test-screen",
-  created_at: "2026-01-01T00:00:00Z",
-  updated_at: "2026-01-01T00:00:00Z",
-  filename: "screen.png",
-  mime_type: "image/png",
-  bit_depth: 1,
-  width: 800,
-  height: 480,
-  size: 4,
-  uri: "/uploads/screen.png",
-};
+/** One JSON-RPC request to /mcp, answered with its `result`. */
+const rpc = <A>(method: string, params?: Testing.McpParams) =>
+  Effect.gen(function* () {
+    const response = yield* send(method, params);
+    return ((yield* response.json) as { readonly result: A }).result;
+  });
 
-const playlist = {
-  id: 20,
-  name: "main",
-  label: "Main",
-  current_item_id: 30,
-  mode: "automatic",
-  created_at: "2026-01-01T00:00:00Z",
-  updated_at: "2026-01-01T00:00:00Z",
-  items: [
-    {
-      id: 30,
-      screen_id: 10,
-      position: 1,
-      created_at: "2026-01-01T00:00:00Z",
-      updated_at: "2026-01-01T00:00:00Z",
-    },
-  ],
-};
+const callTool = (name: string, args: { readonly [key: string]: Schema.Json }) =>
+  rpc<ToolResult>("tools/call", { name, arguments: args });
 
-const device = {
-  id: 40,
-  model_id: 1,
-  playlist_id: 20,
-  label: "Desk",
-  mac_address: "e0:72:a1:2f:bc:fc",
-  api_key: "must-never-leave-client",
-  firmware_version: "1.6.0",
-  wifi_band: 2.4,
-  wifi_signal: -52,
-  battery_charge: 87,
-  battery_voltage: 4.1,
-  charging: false,
-  refresh_rate: 900,
-  image_cached: true,
-  synced_at: "2026-01-01T00:00:00Z",
-  width: 800,
-  height: 480,
-};
+const noTerminus = () => assert.fail("No Terminus request expected");
 
-test("exposes the curated tools and redacts device credentials", async () => {
-  let loginCalls = 0;
-  let playlistPatchCalls = 0;
-  let screenCreateCalls = 0;
-  let screenPatchCalls = 0;
-  const fetcher: typeof fetch = async (input, init) => {
-    const url = requestUrl(input);
-    const method = init?.method ?? "GET";
-    const authorization = new Headers(init?.headers).get("Authorization");
-    const body = typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
+it.effect("lists the curated tools with their hints", () =>
+  Effect.gen(function* () {
+    const { tools } = yield* rpc<{ readonly tools: ReadonlyArray<Tool> }>("tools/list");
+    const tool = (name: string) => {
+      const found = tools.find((candidate) => candidate.name === name);
+      assert.ok(found, `${name} is listed`);
+      return found;
+    };
 
-    if (url.pathname === "/login") {
-      loginCalls += 1;
-      assert.deepEqual(body, { login: "agent@example.test", password: "secret" });
-      return json({ access_token: "access", refresh_token: "refresh" });
-    }
-    if (url.pathname === "/uploads/screen.png") {
-      assert.equal(authorization, null);
-      return new Response(new Uint8Array([137, 80, 78, 71]), {
-        headers: { "Content-Type": "image/png" },
-      });
-    }
-
-    assert.equal(authorization, "access");
-    if (url.pathname === "/api/devices" && method === "GET") {
-      return json({ data: [device] });
-    }
-    if (url.pathname === "/api/models") return json({ data: [model] });
-    if (url.pathname === "/api/screens" && method === "GET") {
-      return json({ data: [screen] });
-    }
-    if (url.pathname === "/api/playlists" && method === "GET") {
-      return json({ data: [playlist] });
-    }
-    if (url.pathname === "/api/screens" && method === "POST") {
-      screenCreateCalls += 1;
-      assert.deepEqual(body, {
-        screen: {
-          model_id: 1,
-          label: "Created",
-          name: "created",
-          content: "<h1>Created</h1>",
-        },
-      });
-      return json({ data: { ...screen, label: "Created", name: "created" } });
-    }
-    if (url.pathname === "/api/screens/10" && method === "PATCH") {
-      screenPatchCalls += 1;
-      assert.deepEqual(body, {
-        screen: { label: "Updated", content: "<h1>Updated</h1>" },
-      });
-      return json({ data: { ...screen, label: "Updated" } });
-    }
-    if (url.pathname === "/api/playlists" && method === "POST") {
-      assert.deepEqual(body, {
-        playlist: {
-          name: "agent",
-          label: "Agent",
-          mode: "manual",
-          items: [{ screen_id: 10 }],
-        },
-      });
-      return json({ data: { ...playlist, id: 21, name: "agent", label: "Agent" } });
-    }
-    if (url.pathname === "/api/playlists/20" && method === "PATCH") {
-      playlistPatchCalls += 1;
-      if (playlistPatchCalls === 1) {
-        assert.deepEqual(body, {
-          playlist: {
-            name: "main",
-            label: "Main updated",
-            mode: "manual",
-            items: [{ screen_id: 10 }],
-          },
-        });
-        return json({
-          data: {
-            ...playlist,
-            label: "Main updated",
-            current_item_id: null,
-            mode: "manual",
-            items: [{ ...playlist.items[0], id: 31 }],
-          },
-        });
-      }
-
-      assert.deepEqual(body, {
-        playlist: { name: "main", label: "Main updated", current_item_id: 31 },
-      });
-      return json({
-        data: {
-          ...playlist,
-          label: "Main updated",
-          current_item_id: 31,
-          mode: "manual",
-          items: [{ ...playlist.items[0], id: 31 }],
-        },
-      });
-    }
-    if (url.pathname === "/api/devices/40" && method === "PATCH") {
-      assert.deepEqual(body, { device: { playlist_id: 20 } });
-      return json({ data: device });
-    }
-
-    return new Response("not found", { status: 404 });
-  };
-
-  const { mcp, close } = await connectedClient(fetcher);
-  try {
-    const listed = await mcp.listTools();
-    assert.deepEqual(listed.tools.map(({ name }) => name).sort(), [
+    assert.deepStrictEqual(tools.map(({ name }) => name).sort(), [
       "assign_playlist",
       "create_screen",
       "get_display_context",
@@ -217,20 +66,27 @@ test("exposes the curated tools and redacts device credentials", async () => {
       "search_screen_docs",
       "update_screen",
     ]);
-    const createScreenTool = listed.tools.find(({ name }) => name === "create_screen");
-    assert.match(JSON.stringify(createScreenTool?.inputSchema), /Use dither for photos/);
-    const updateScreenTool = listed.tools.find(({ name }) => name === "update_screen");
-    assert.doesNotMatch(JSON.stringify(updateScreenTool?.inputSchema), /model_id|"name"/);
+    assert.match(JSON.stringify(tool("create_screen").inputSchema), /Use dither for photos/);
+    assert.notMatch(JSON.stringify(tool("update_screen").inputSchema), /model_id|"name"/);
+    assert.strictEqual(tool("list_screens").annotations.readOnlyHint, true);
+    const assign = tool("assign_playlist").annotations;
+    assert.strictEqual(assign.readOnlyHint, false);
+    assert.strictEqual(assign.destructiveHint, false);
+    assert.strictEqual(assign.idempotentHint, true);
+  }).pipe(Effect.provide(serve(noTerminus))),
+);
 
-    const context = await mcp.callTool({
-      name: "get_display_context",
-      arguments: {},
-    });
-    const serialized = JSON.stringify(context);
-    const display = structured<{ context: DisplayContext }>(context).context;
-    assert.doesNotMatch(serialized, /api_key|mac_address|must-never|e0:72/i);
-    assert.equal(display.device.label, "Desk");
-    assert.deepEqual(display.framework.screen_classes, [
+it.effect("redacts device credentials and reuses one login", () => {
+  let logins = 0;
+
+  return Effect.gen(function* () {
+    const mcp = yield* Testing.mcpClient(Actions);
+
+    const context = yield* callTool("get_display_context", {});
+    assert.notMatch(JSON.stringify(context), /api_key|mac_address|must-never|e0:72/i);
+    const { context: display } = yield* mcp.get_display_context();
+    assert.strictEqual(display.device.label, "Desk");
+    assert.deepStrictEqual(display.framework.screen_classes, [
       "screen",
       "screen--md",
       "screen--ogv2",
@@ -238,122 +94,231 @@ test("exposes the curated tools and redacts device credentials", async () => {
       "screen--1bit",
       "screen--landscape",
     ]);
-    assert.deepEqual(display.framework.screen_variables, {
+    assert.deepStrictEqual(display.framework.screen_variables, {
       "--screen-w": "800px",
       "--screen-h": "480px",
     });
 
-    const docs = await mcp.callTool({
-      name: "search_screen_docs",
-      arguments: {},
-    });
-    const docsContent = structured<{ docs: ScreenDoc[] }>(docs);
-    assert.ok(docsContent.docs.some(({ id }) => id === "terminus:screen-authoring"));
+    const assigned = yield* callTool("assign_playlist", { device_id: 40, playlist_id: 20 });
+    assert.notMatch(JSON.stringify(assigned), /api_key|mac_address|must-never/i);
+    assert.strictEqual(logins, 1);
+  }).pipe(
+    Effect.provide(
+      serve((request) => {
+        if (request.url.pathname === "/login") logins += 1;
+        return terminus(({ method, url, body }) => {
+          if (url.pathname !== "/api/devices/40" || method !== "PATCH") return undefined;
+          assert.deepStrictEqual(body, { device: { playlist_id: 20 } });
+          return json({ data: device });
+        })(request);
+      }),
+    ),
+  );
+});
 
-    const guide = await mcp.callTool({
-      name: "read_screen_doc",
-      arguments: { doc_id: "terminus:screen-authoring" },
-    });
-    assert.match(structured<{ markdown: string }>(guide).markdown, /complete HTML document/);
+it.effect("returns a screen's rendered image beside its record", () =>
+  Effect.gen(function* () {
+    const mcp = yield* Testing.mcpClient(Actions);
 
-    const frameworkDocs = await mcp.callTool({
-      name: "search_screen_docs",
-      arguments: { query: "structure" },
-    });
-    const frameworkDocsContent = structured<{ docs: ScreenDoc[] }>(frameworkDocs);
-    assert.deepEqual(
-      frameworkDocsContent.docs.map(({ id }) => id),
-      ["framework:3.1:structure"],
+    const image = yield* mcp.get_screen_image({ screen_id: 10 });
+    assert.strictEqual(image.screen.id, 10);
+    assert.deepStrictEqual(image.image, { data: png, mimeType: "image/png" });
+
+    const result = yield* callTool("get_screen_image", { screen_id: 10 });
+    assert.deepStrictEqual(result.structuredContent, { screen });
+    assert.deepStrictEqual(
+      result.content.map(({ type }) => type),
+      ["text", "image"],
     );
-    const frameworkDoc = await mcp.callTool({
-      name: "read_screen_doc",
-      arguments: { doc_id: "framework:3.1:structure" },
-    });
-    assert.equal(structured<{ markdown: string }>(frameworkDoc).markdown, "# Structure");
+    assert.strictEqual(result.content[1]?.data, Buffer.from(png).toString("base64"));
+  }).pipe(Effect.provide(serve(terminus()))),
+);
 
-    const image = await mcp.callTool({
-      name: "get_screen_image",
-      arguments: { screen_id: 10 },
-    });
-    assert.equal(image.content[1]?.type, "image");
+it.effect("creates and replaces screens", () => {
+  let creates = 0;
+  let patches = 0;
 
-    await mcp.callTool({
-      name: "create_screen",
-      arguments: {
-        model_id: 1,
-        label: "Created",
-        name: "created",
-        html: "<h1>Created</h1>",
-      },
+  return Effect.gen(function* () {
+    const mcp = yield* Testing.mcpClient(Actions);
+
+    // Sent raw: the typed client encodes, and refuses untrimmed text; the server trims it.
+    const created = yield* callTool("create_screen", {
+      model_id: 1,
+      label: "  Created ",
+      name: "created",
+      html: "<h1>Created</h1>",
     });
-    const stalePlaylist = await mcp.callTool({
-      name: "create_screen",
-      arguments: {
+    assert.strictEqual(created.isError, false);
+
+    const stalePlaylist = yield* Effect.flip(
+      mcp.create_screen({
         model_id: 1,
         label: "Orphan",
         name: "orphan",
         html: "<h1>Orphan</h1>",
         playlist_id: 999,
-      },
-    });
-    assert.equal(stalePlaylist.isError, true);
-    assert.match(JSON.stringify(stalePlaylist), /Playlist 999 was not found/);
-    assert.equal(screenCreateCalls, 1);
-    await mcp.callTool({
-      name: "update_screen",
-      arguments: {
-        screen_id: 10,
-        label: "Updated",
-        html: "<h1>Updated</h1>",
-      },
-    });
-    const identityUpdate = await mcp.callTool({
-      name: "update_screen",
-      arguments: {
-        screen_id: 10,
-        model_id: 2,
-        name: "different-screen",
-        html: "<h1>Wrong target</h1>",
-      },
-    });
-    assert.equal(identityUpdate.isError, true);
-    assert.equal(screenPatchCalls, 1);
-    await mcp.callTool({
-      name: "save_playlist",
-      arguments: {
-        name: "agent",
-        label: "Agent",
-        mode: "manual",
-        screen_ids: [10],
-      },
-    });
-    const updatedPlaylist = await mcp.callTool({
-      name: "save_playlist",
-      arguments: {
-        playlist_id: 20,
-        name: "main",
-        label: "Main updated",
-        mode: "manual",
-        screen_ids: [10],
-      },
-    });
-    assert.equal(
-      structured<{ playlist: typeof playlist }>(updatedPlaylist).playlist.current_item_id,
-      31,
+      }),
     );
-    assert.equal(playlistPatchCalls, 2);
-    const assigned = await mcp.callTool({
-      name: "assign_playlist",
-      arguments: { device_id: 40, playlist_id: 20 },
+    assert.strictEqual(stalePlaylist._tag, "TerminusError");
+    assert.match(stalePlaylist.message, /Playlist 999 was not found/);
+    assert.strictEqual(creates, 1);
+
+    yield* mcp.update_screen({ screen_id: 10, label: "Updated", html: "<h1>Updated</h1>" });
+    const identityUpdate = yield* callTool("update_screen", {
+      screen_id: 10,
+      model_id: 2,
+      name: "different-screen",
+      html: "<h1>Wrong target</h1>",
     });
-    assert.doesNotMatch(JSON.stringify(assigned), /api_key|mac_address|must-never/i);
-    assert.equal(loginCalls, 1);
-  } finally {
-    await close();
-  }
+    assert.strictEqual(identityUpdate.isError, true);
+    assert.strictEqual(patches, 1);
+  }).pipe(
+    Effect.provide(
+      serve(
+        terminus(({ method, url, body }) => {
+          if (url.pathname === "/api/screens" && method === "POST") {
+            creates += 1;
+            assert.deepStrictEqual(body, {
+              screen: {
+                model_id: 1,
+                label: "Created",
+                name: "created",
+                content: "<h1>Created</h1>",
+              },
+            });
+            return json({ data: { ...screen, label: "Created", name: "created" } });
+          }
+          if (url.pathname === "/api/screens/10" && method === "PATCH") {
+            patches += 1;
+            assert.deepStrictEqual(body, {
+              screen: { label: "Updated", content: "<h1>Updated</h1>" },
+            });
+            return json({ data: { ...screen, label: "Updated" } });
+          }
+          return undefined;
+        }),
+      ),
+    ),
+  );
 });
 
-test("accepts zero dimensions and reports redacted device choices", async () => {
+it.effect("saves playlists and selects the first item of a replaced one", () => {
+  let patches = 0;
+  const items = [{ ...playlist.items[0], id: 31 }];
+
+  return Effect.gen(function* () {
+    const mcp = yield* Testing.mcpClient(Actions);
+
+    const created = yield* mcp.save_playlist({
+      name: "agent",
+      label: "Agent",
+      mode: "manual",
+      screen_ids: [10],
+    });
+    assert.strictEqual(created.action, "created");
+
+    const updated = yield* mcp.save_playlist({
+      playlist_id: 20,
+      name: "main",
+      label: "Main updated",
+      mode: "manual",
+      screen_ids: [10],
+    });
+    assert.strictEqual(updated.action, "updated");
+    assert.strictEqual(updated.playlist.current_item_id, 31);
+    assert.strictEqual(patches, 2);
+  }).pipe(
+    Effect.provide(
+      serve(
+        terminus(({ method, url, body }) => {
+          if (url.pathname === "/api/playlists" && method === "POST") {
+            assert.deepStrictEqual(body, {
+              playlist: {
+                name: "agent",
+                label: "Agent",
+                mode: "manual",
+                items: [{ screen_id: 10 }],
+              },
+            });
+            return json({ data: { ...playlist, id: 21, name: "agent", label: "Agent" } });
+          }
+          if (url.pathname !== "/api/playlists/20" || method !== "PATCH") return undefined;
+
+          patches += 1;
+          if (patches === 1) {
+            assert.deepStrictEqual(body, {
+              playlist: {
+                name: "main",
+                label: "Main updated",
+                mode: "manual",
+                items: [{ screen_id: 10 }],
+              },
+            });
+            return json({
+              data: {
+                ...playlist,
+                label: "Main updated",
+                current_item_id: null,
+                mode: "manual",
+                items,
+              },
+            });
+          }
+          assert.deepStrictEqual(body, {
+            playlist: { name: "main", label: "Main updated", current_item_id: 31 },
+          });
+          return json({
+            data: {
+              ...playlist,
+              label: "Main updated",
+              current_item_id: 31,
+              mode: "manual",
+              items,
+            },
+          });
+        }),
+      ),
+    ),
+  );
+});
+
+it.effect("searches and reads the screen docs from one catalog", () =>
+  Effect.gen(function* () {
+    const mcp = yield* Testing.mcpClient(Actions);
+    const catalogFetches = docsFetches.get("https://trmnl.com/framework") ?? 0;
+
+    const { docs } = yield* mcp.search_screen_docs();
+    assert.deepStrictEqual(
+      docs.map(({ id }) => id),
+      [
+        "terminus:screen-authoring",
+        "trmnl:private-plugins/templates",
+        "framework:3.1:structure",
+        "framework:3.1:screen",
+        "framework:3.1:layout",
+        "framework:3.1:framework_runtime",
+      ],
+    );
+    const guide = yield* mcp.read_screen_doc({ doc_id: "terminus:screen-authoring" });
+    assert.match(guide.markdown, /complete HTML document/);
+
+    const structure = yield* mcp.search_screen_docs({ query: "structure" });
+    assert.deepStrictEqual(
+      structure.docs.map(({ id }) => id),
+      ["framework:3.1:structure"],
+    );
+    const frameworkDoc = yield* mcp.read_screen_doc({ doc_id: "framework:3.1:structure" });
+    assert.strictEqual(frameworkDoc.markdown, "# Structure");
+
+    const unknownDoc = yield* Effect.flip(mcp.read_screen_doc({ doc_id: "framework:3.1:nope" }));
+    assert.strictEqual(unknownDoc._tag, "DocsError");
+    assert.match(unknownDoc.message, /Unknown screen documentation ID/);
+    // Two searches and three reads share one catalog.
+    assert.strictEqual(docsFetches.get("https://trmnl.com/framework"), catalogFetches + 1);
+  }).pipe(Effect.provide(serve(noTerminus))),
+);
+
+it.effect("accepts zero dimensions and reports redacted device choices", () => {
   const pendingDevice = {
     ...device,
     id: 41,
@@ -366,181 +331,133 @@ test("accepts zero dimensions and reports redacted device choices", async () => 
     height: 0,
   };
   const pendingModel = { ...model, id: 2, css: null, width: 0, height: 0 };
-  const fetcher: typeof fetch = async (input) => {
-    const url = requestUrl(input);
-    if (url.pathname === "/login") {
-      return json({ access_token: "access", refresh_token: "refresh" });
-    }
-    if (url.pathname === "/api/devices") return json({ data: [device, pendingDevice] });
-    if (url.pathname === "/api/models") return json({ data: [model, pendingModel] });
-    if (url.pathname === "/api/playlists") return json({ data: [playlist] });
-    assert.fail(`Unexpected request to ${url.href}`);
-  };
 
-  const client = new TerminusClient({
-    baseUrl: "https://terminus.example.test",
-    login: "agent@example.test",
-    password: "secret",
-    fetcher,
-  });
-  await assert.rejects(
-    () => client.getDisplayContext(),
-    (error: Error) => {
-      assert.match(error.message, /"device_id":40/);
-      assert.match(error.message, /"device_id":41/);
-      assert.doesNotMatch(error.message, /api_key|mac_address|second-secret|aa:bb/i);
-      return true;
-    },
+  return Effect.gen(function* () {
+    const terminus = yield* Terminus;
+
+    const choice = yield* Effect.flip(terminus.getDisplayContext({}));
+    assert.match(choice.message, /"device_id":40/);
+    assert.match(choice.message, /"device_id":41/);
+    assert.notMatch(choice.message, /api_key|mac_address|second-secret|aa:bb/i);
+
+    const { context } = yield* terminus.getDisplayContext({ device_id: 41 });
+    assert.strictEqual(context.device.width, 0);
+    assert.strictEqual(context.model.height, 0);
+    assert.deepStrictEqual(context.model.css, { classes: {}, variables: [] });
+    assert.deepStrictEqual(context.framework.screen_variables, {});
+  }).pipe(
+    Effect.provide(
+      terminusLayer(
+        terminus(({ url }) => {
+          if (url.pathname === "/api/devices") return json({ data: [device, pendingDevice] });
+          if (url.pathname === "/api/models") return json({ data: [model, pendingModel] });
+          return undefined;
+        }),
+      ),
+    ),
   );
-
-  const context = await client.getDisplayContext(41);
-  assert.equal(context.device.width, 0);
-  assert.equal(context.model.height, 0);
-  assert.deepEqual(context.model.css, { classes: {}, variables: [] });
-  assert.deepEqual(context.framework.screen_variables, {});
 });
 
-test("refreshes once after Terminus reports an expired JWT", async () => {
+it.effect("refreshes once after Terminus reports an expired JWT", () => {
   let deviceRequests = 0;
-  const fetcher: typeof fetch = async (input, init) => {
-    const url = requestUrl(input);
-    const authorization = new Headers(init?.headers).get("Authorization");
 
-    if (url.pathname === "/login") {
-      return json({ access_token: "old", refresh_token: "refresh-1" });
-    }
-    if (url.pathname === "/api/jwt") {
-      assert.equal(authorization, "old");
-      return json({ access_token: "new", refresh_token: "refresh-2" });
-    }
-    if (url.pathname === "/api/devices") {
-      deviceRequests += 1;
-      return authorization === "old"
-        ? json({ error: "expired JWT access token" }, 400)
-        : json({ data: [device] });
-    }
-    if (url.pathname === "/api/models") return json({ data: [model] });
-    if (url.pathname === "/api/playlists") return json({ data: [playlist] });
-    return new Response(null, { status: 404 });
-  };
-
-  const client = new TerminusClient({
-    baseUrl: "https://terminus.example.test",
-    login: "agent@example.test",
-    password: "secret",
-    fetcher,
-  });
-  const context = await client.getDisplayContext();
-  assert.equal(context.device.id, 40);
-  assert.equal(deviceRequests, 2);
-});
-
-test("rejects rendered images outside the configured Terminus origin", async () => {
-  const fetcher: typeof fetch = async (input) => {
-    const url = requestUrl(input);
-    if (url.pathname === "/login") {
-      return json({ access_token: "access", refresh_token: "refresh" });
-    }
-    if (url.pathname === "/api/screens") {
-      return json({ data: [{ ...screen, uri: "https://attacker.test/image.png" }] });
-    }
-    assert.fail(`Unexpected request to ${url.href}`);
-  };
-
-  const client = new TerminusClient({
-    baseUrl: "https://terminus.example.test",
-    login: "agent@example.test",
-    password: "secret",
-    fetcher,
-  });
-  await assert.rejects(() => client.getScreenImage(10), /unsafe screen image URL/);
-});
-
-test("screen docs reject invalid IDs and redirects", async () => {
-  let requests = 0;
-  const docs = new ScreenDocs(async () => {
-    requests += 1;
-    return new Response(null, {
-      status: 302,
-      headers: { Location: "https://attacker.test/instructions.md" },
-    });
-  });
-
-  await assert.rejects(() => docs.read("https://attacker.test"), /Unknown/);
-  assert.equal(requests, 0);
-  await assert.rejects(() => docs.search(), /HTTP 302/);
-  assert.equal(requests, 1);
-});
-
-async function connectedClient(fetcher: typeof fetch) {
-  const server = createServer(
-    new TerminusClient({
-      baseUrl: "https://terminus.example.test",
-      login: "agent@example.test",
-      password: "secret",
-      fetcher,
-    }),
-    new ScreenDocs(docsFetcher),
+  return Effect.gen(function* () {
+    const terminus = yield* Terminus;
+    const { context } = yield* terminus.getDisplayContext({});
+    assert.strictEqual(context.device.id, 40);
+    assert.strictEqual(deviceRequests, 2);
+  }).pipe(
+    Effect.provide(
+      terminusLayer(({ url, authorization }) => {
+        if (url.pathname === "/login") {
+          return json({ access_token: "old", refresh_token: "refresh-1" });
+        }
+        if (url.pathname === "/api/jwt") {
+          assert.strictEqual(authorization, "old");
+          return json({ access_token: "new", refresh_token: "refresh-2" });
+        }
+        if (url.pathname === "/api/devices") {
+          deviceRequests += 1;
+          return authorization === "old"
+            ? json({ error: "expired JWT access token" }, 400)
+            : json({ data: [device] });
+        }
+        if (url.pathname === "/api/models") return json({ data: [model] });
+        if (url.pathname === "/api/playlists") return json({ data: [playlist] });
+        return new Response(null, { status: 404 });
+      }),
+    ),
   );
-  const mcp = new Client({ name: "terminus-mcp-test", version: "1.0.0" });
-  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
-  await server.connect(serverTransport);
-  await mcp.connect(clientTransport);
+});
 
-  return {
-    mcp,
-    close: async () => {
-      await mcp.close();
-      await server.close();
-    },
-  };
-}
+it.effect("rejects rendered images outside the configured Terminus origin", () =>
+  Effect.gen(function* () {
+    const terminus = yield* Terminus;
+    const error = yield* Effect.flip(terminus.getScreenImage({ screen_id: 10 }));
+    assert.match(error.message, /unsafe screen image URL/);
+  }).pipe(
+    Effect.provide(
+      terminusLayer(
+        terminus(({ url }) =>
+          url.pathname === "/api/screens"
+            ? json({ data: [{ ...screen, uri: "https://attacker.test/image.png" }] })
+            : undefined,
+        ),
+      ),
+    ),
+  ),
+);
 
-const docsFetcher: typeof fetch = async (input) => {
-  const url = requestUrl(input);
-  if (url.href === "https://trmnl.com/framework") {
-    return text(
-      '<a href="/framework/docs/3.0">3.0</a><a href="/framework/docs/3.1">3.1</a>',
-      "text/html",
-    );
-  }
-  if (url.href === "https://docs.trmnl.com/go/llms.txt") {
-    return text(
-      "- [Screen Templating](https://docs.trmnl.com/go/private-plugins/templates.md): Build screens.",
-      "text/markdown",
-    );
-  }
-  if (url.href === "https://trmnl.com/framework/docs/3.1") {
-    return text(
-      '<a href="/framework/docs/3.1/structure">Structure</a>' +
-        '<a href="/framework/docs/3.1/screen">Screen</a>' +
-        '<a href="/framework/docs/3.1/layout">Layout</a>' +
-        '<a href="/framework/docs/3.1/framework_runtime">Runtime</a>',
-      "text/html",
-    );
-  }
-  if (url.href === "https://trmnl.com/framework/examples") {
-    return text('<a href="/framework/examples/weather">Weather</a>', "text/html");
-  }
-  if (url.href === "https://trmnl.com/framework/docs/3.1/structure.md") {
-    return text("# Structure", "text/markdown");
-  }
-  assert.fail(`Unexpected documentation request to ${url.href}`);
-};
+it.effect("stops reading an image past 10 MiB that declares no length", () => {
+  const mebibyte = new Uint8Array(1024 * 1024);
+  let sent = 0;
 
-function requestUrl(input: string | URL | Request): URL {
-  return new URL(input instanceof Request ? input.url : input);
-}
+  return Effect.gen(function* () {
+    const terminus = yield* Terminus;
+    const error = yield* Effect.flip(terminus.getScreenImage({ screen_id: 10 }));
+    assert.match(error.message, /exceeds the 10 MiB limit/);
+    assert.isBelow(sent, 20);
+  }).pipe(
+    Effect.provide(
+      terminusLayer((request) => {
+        if (request.url.pathname !== "/uploads/screen.png") return terminus()(request);
+        // Endless, so only a reader that stops can finish.
+        const body = new ReadableStream<Uint8Array>({
+          pull: (controller) => {
+            sent += 1;
+            controller.enqueue(mebibyte);
+          },
+        });
+        return new Response(body, { headers: { "Content-Type": "image/png" } });
+      }),
+    ),
+  );
+});
 
-function json(body: unknown, status = 200): Response {
-  return Response.json(body, { status });
-}
+it.effect("reports a TRMNL failure and fetches again on the next search", () => {
+  let failures = 1;
 
-function text(body: string, contentType: string): Response {
-  return new Response(body, { headers: { "Content-Type": contentType } });
-}
+  return Effect.gen(function* () {
+    const docs = yield* ScreenDocs;
+    const failed = yield* Effect.flip(docs.search({}));
+    assert.match(failed.message, /TRMNL documentation request failed \(HTTP 500\)/);
+    // The failure is not cached.
+    assert.ok((yield* docs.search({})).docs.length > 0);
+  }).pipe(
+    Effect.provide(
+      ScreenDocs.layer.pipe(
+        Layer.provide(
+          fakeHttp((request) =>
+            request.url.href === "https://trmnl.com/framework" && failures-- > 0
+              ? new Response(null, { status: 500 })
+              : (trmnlDocs(request) ?? assert.fail(`Unexpected request to ${request.url.href}`)),
+          ),
+        ),
+      ),
+    ),
+  );
+});
 
-function structured<T>(result: Awaited<ReturnType<Client["callTool"]>>): T {
-  assert.ok(result.structuredContent);
-  return result.structuredContent as T;
+function terminusLayer(respond: Parameters<typeof fakeHttp>[0]) {
+  return Terminus.layer.pipe(Layer.provide(fakeHttp(respond)), Layer.provide(configured()));
 }
