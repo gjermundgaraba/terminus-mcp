@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
+
+Supports Terminus `0.77.0`, with deletion and extensions: twenty tools, up from ten.
 
 ### Breaking changes
 
