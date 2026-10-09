@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+### Breaking changes
+
+**Terminus `0.77.0` is the supported release.** `get_screen_image` reads the one screen through
+`GET /api/screens/:id`, which Terminus added in `0.73.0`, instead of listing every screen.
+
+- Migrate: upgrade Terminus to `0.77.0`.
+
+### Changes
+
+- `delete_screen` deletes a screen and removes it from every playlist; `delete_playlist` deletes a
+  playlist and unassigns it from every device. Neither can be undone.
+- Extensions: `list_extensions`, `get_extension`, `create_extension`, `update_extension` and
+  `delete_extension`, with `create_extension_exchange`, `update_extension_exchange` and
+  `delete_extension_exchange` for the URLs Terminus fetches their data from. Exchange header values
+  are never returned. Exchanges make the Terminus server fetch URLs an agent chooses; restrict its
+  outbound network.
+- A Terminus validation failure names each field it refused. A refusal's detail is cut to 500
+  characters instead of being dropped when long, and a refusal that is not JSON no longer echoes
+  its body.
+- `create_screen` and `update_screen` accept `mode: "text"`, the default, beside `dither`.
+
 ## 0.2.0
 
 Rebuilt on Effect 4.0.2 and `@gjermundgaraba/effect-actions` 0.11.0, in place of the MCP SDK and

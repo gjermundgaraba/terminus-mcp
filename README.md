@@ -10,10 +10,10 @@ HTTP. It needs Node.js 24.11 or newer.
 ## Status
 
 The curated publishing API is implemented and verified against Terminus
-`0.67.0`. See [docs/design.md](docs/design.md) for the API boundary and security
+`0.77.0`. See [docs/design.md](docs/design.md) for the API boundary and security
 model.
 
-The server exposes ten tools:
+The server exposes these tools:
 
 - `get_display_context`, `list_screens`, `get_screen_image`, and
   `list_playlists` for Terminus discovery;
@@ -21,10 +21,21 @@ The server exposes ten tools:
   TRMNL Framework documentation;
 - `create_screen` and `update_screen` for complete HTML/CSS screens;
 - `save_playlist` for complete ordered playlist replacement;
-- `assign_playlist` for the single allowed device mutation.
+- `assign_playlist` for the single allowed device mutation;
+- `list_extensions`, `get_extension`, `create_extension`, `update_extension`,
+  `create_extension_exchange`, and `update_extension_exchange` for extensions,
+  which Terminus rebuilds into screens on a schedule from fetched or supplied
+  data;
+- `delete_screen`, `delete_playlist`, `delete_extension`, and
+  `delete_extension_exchange`, which cannot be undone.
 
-It deliberately does not expose authentication, firmware endpoints, deletion,
-model mutation, raw device credentials, or a generic API proxy.
+It deliberately does not expose authentication, firmware endpoints, model
+mutation, device deletion, raw device credentials, exchange header values, or a
+generic API proxy.
+
+Extension exchanges make the Terminus server fetch URLs an agent chooses, so
+run Terminus with its outbound network restricted; see
+[docs/design.md](docs/design.md#extension-exchanges).
 
 ## Installation
 
@@ -135,10 +146,12 @@ To verify against a configured Terminus instance:
 vp run verify:live
 ```
 
-The live check calls all ten actions in process against the Terminus in
+The live check calls every action in process against the Terminus in
 `TERMINUS_URL`, `TERMINUS_LOGIN` and `TERMINUS_PASSWORD`. It creates a
-temporary screen and playlist, assigns the device's existing playlist back to
-itself, and deletes the temporary objects before exiting.
+temporary screen, playlist, and unscheduled extension, with an exchange that
+fetches the Terminus health check, and assigns the device's existing playlist
+back to itself. It deletes the temporary objects with the delete tools, or
+directly if the run fails first.
 
 ## License
 

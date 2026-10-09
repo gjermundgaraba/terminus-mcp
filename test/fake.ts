@@ -101,8 +101,16 @@ export const terminus =
           return json({ data: [model] });
         case "/api/screens":
           return json({ data: [screen] });
+        case `/api/screens/${screen.id}`:
+          return json({ data: screen });
         case "/api/playlists":
           return json({ data: [playlist] });
+        case "/api/extensions":
+          return json({ data: [extension] });
+        case `/api/extensions/${extension.id}`:
+          return json({ data: extension });
+        case `/api/extensions/${extension.id}/exchanges`:
+          return json({ data: [exchange] });
       }
     }
     return assert.fail(`Unexpected Terminus request: ${method} ${url.href}`);
@@ -230,4 +238,40 @@ export const device = {
   synced_at: "2026-01-01T00:00:00Z",
   width: 800,
   height: 480,
+};
+
+export const extension = {
+  id: 50,
+  label: "Save Point",
+  name: "save-point",
+  description: null,
+  kind: "static",
+  mode: "dither",
+  tags: [],
+  static_body: { games: ["Chrono Trigger"] },
+  fields: null,
+  template: '<div class="{{ extension.css_classes }}">{{ source_1.games[0] }}</div>',
+  data: null,
+  interval: 15,
+  unit: "minute",
+  days: [],
+  last_day_of_month: false,
+  start_at: "2026-08-03T03:00:00+00:00",
+  created_at: "2026-08-03T06:33:19+00:00",
+  updated_at: "2026-10-08T06:28:09+00:00",
+  model_ids: [1],
+  device_ids: [],
+};
+
+export const exchange = {
+  id: 60,
+  headers: { Authorization: "Bearer must-never-leak" },
+  verb: "get",
+  template: "https://api.example.test/games.json",
+  body: null,
+  data: { source_1: { games: [] } },
+  errors: {},
+  refreshed_at: "2026-10-08T06:28:09+00:00",
+  created_at: "2026-10-08T06:28:09+00:00",
+  updated_at: "2026-10-08T06:28:09+00:00",
 };

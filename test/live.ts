@@ -6,11 +6,11 @@ import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 import * as Action from "@gjermundgaraba/effect-actions/Action";
 
 import { httpClientLayer } from "../src/http-client.js";
-import { actions, services } from "../src/server.js";
+import { Actions, actions, services } from "../src/server.js";
 import { terminusConfig } from "../src/terminus/client.js";
 import { type FrameworkContext, Tokens } from "../src/terminus/contracts.js";
 
-const created: { screen?: number; playlist?: number } = {};
+const created: { screen?: number; playlist?: number; extension?: number } = {};
 
 const verify = Effect.gen(function* () {
   const terminus = yield* Action.client(actions);
@@ -50,6 +50,7 @@ const verify = Effect.gen(function* () {
     screen_id: screen.id,
     label: "Terminus MCP verification updated",
     html: verificationHtml(framework, true),
+    mode: "text",
   });
 
   const saved = yield* terminus.save_playlist({
@@ -72,12 +73,88 @@ const verify = Effect.gen(function* () {
 
   yield* terminus.assign_playlist({ device_id: device.id, playlist_id: originalPlaylistId });
 
-  yield* Effect.logInfo("Live verification passed for all ten actions.");
+  yield* terminus.delete_playlist({ playlist_id: saved.playlist.id });
+  delete created.playlist;
+  yield* terminus.delete_screen({ screen_id: screen.id });
+  delete created.screen;
+
+  // Terminus answers for each missing resource differently.
+  for (const missing of [
+    Effect.flip(terminus.get_screen_image({ screen_id: screen.id })),
+    Effect.flip(terminus.delete_screen({ screen_id: screen.id })),
+    Effect.flip(terminus.delete_playlist({ playlist_id: saved.playlist.id })),
+  ]) {
+    assert.match((yield* missing).message, /was not found/);
+  }
+
+  // Never built: no schedule, and no models or devices.
+  const { extension } = yield* terminus.create_extension({
+    name,
+    label: "Terminus MCP verification",
+    kind: "static",
+    template: '<div class="{{ extension.css_classes }}">{{ source_1.title }}</div>',
+    static_body: { title: "verified" },
+  });
+  created.extension = extension.id;
+  const { extensions } = yield* terminus.list_extensions();
+  assert.ok(extensions.some(({ id }) => id === extension.id));
+
+  // A label alone still carries the schedule, so the extension is never empty.
+  const renamed = yield* terminus.update_extension({
+    extension_id: extension.id,
+    label: "Terminus MCP verification updated",
+  });
+  assert.equal(renamed.extension.unit, "none");
+  const scheduled = yield* terminus.update_extension({
+    extension_id: extension.id,
+    unit: "hour",
+    interval: 1,
+  });
+  assert.equal(scheduled.extension.unit, "hour");
+  assert.equal(scheduled.extension.label, "Terminus MCP verification updated");
+  yield* terminus.update_extension({ extension_id: extension.id, unit: "none" });
+
+  const { baseUrl } = yield* terminusConfig;
+  const { exchange } = yield* terminus.create_extension_exchange({
+    extension_id: extension.id,
+    template: new URL("up", baseUrl).href,
+    headers: { "X-Verification": "never returned" },
+  });
+  assert.deepEqual(exchange.header_names, ["X-Verification"]);
+  yield* terminus.update_extension_exchange({
+    extension_id: extension.id,
+    exchange_id: exchange.id,
+    verb: "get",
+  });
+  const detail = yield* terminus.get_extension({ extension_id: extension.id });
+  assert.equal(detail.extension.label, "Terminus MCP verification updated");
+  assert.deepEqual(
+    detail.exchanges.map(({ id }) => id),
+    [exchange.id],
+  );
+  assert.doesNotMatch(JSON.stringify(detail), /never returned/);
+
+  const exchangeRef = { extension_id: extension.id, exchange_id: exchange.id };
+  yield* terminus.delete_extension_exchange(exchangeRef);
+  yield* terminus.delete_extension({ extension_id: extension.id });
+  delete created.extension;
+
+  for (const missing of [
+    Effect.flip(terminus.get_extension({ extension_id: extension.id })),
+    Effect.flip(terminus.update_extension({ extension_id: extension.id, label: "Gone" })),
+    Effect.flip(terminus.delete_extension({ extension_id: extension.id })),
+    Effect.flip(terminus.update_extension_exchange({ ...exchangeRef, verb: "get" })),
+    Effect.flip(terminus.delete_extension_exchange(exchangeRef)),
+  ]) {
+    assert.match((yield* missing).message, /was not found/);
+  }
+
+  yield* Effect.logInfo(`Live verification passed for all ${Actions.length} actions.`);
 });
 
-/** Deletes what the run created, which no action can. */
+/** Deletes what a failed run created, without the actions that may have failed it. */
 const cleanup = Effect.gen(function* () {
-  if (created.screen === undefined && created.playlist === undefined) return;
+  if (Object.values(created).every((id) => id === undefined)) return;
 
   const { baseUrl, login, password } = yield* terminusConfig;
   const http = (yield* HttpClient.HttpClient).pipe(
@@ -95,7 +172,9 @@ const cleanup = Effect.gen(function* () {
     )
     .pipe(Effect.flatMap(HttpClientResponse.schemaBodyJson(Tokens)));
 
+  // Deleting the extension deletes its exchanges.
   for (const [collection, id] of [
+    ["api/extensions", created.extension],
     ["api/playlists", created.playlist],
     ["api/screens", created.screen],
   ] as const) {

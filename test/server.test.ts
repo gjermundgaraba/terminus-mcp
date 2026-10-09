@@ -9,6 +9,8 @@ import {
   configured,
   device,
   docsFetches,
+  exchange,
+  extension,
   fakeHttp,
   json,
   model,
@@ -56,23 +58,53 @@ it.effect("lists the curated tools with their hints", () =>
 
     assert.deepStrictEqual(tools.map(({ name }) => name).sort(), [
       "assign_playlist",
+      "create_extension",
+      "create_extension_exchange",
       "create_screen",
+      "delete_extension",
+      "delete_extension_exchange",
+      "delete_playlist",
+      "delete_screen",
       "get_display_context",
+      "get_extension",
       "get_screen_image",
+      "list_extensions",
       "list_playlists",
       "list_screens",
       "read_screen_doc",
       "save_playlist",
       "search_screen_docs",
+      "update_extension",
+      "update_extension_exchange",
       "update_screen",
     ]);
     assert.match(JSON.stringify(tool("create_screen").inputSchema), /Use dither for photos/);
     assert.notMatch(JSON.stringify(tool("update_screen").inputSchema), /model_id|"name"/);
+    const required = (name: string) => (tool(name).inputSchema as { required?: unknown }).required;
+    assert.deepStrictEqual(required("update_extension"), ["extension_id"]);
+    assert.deepStrictEqual(required("update_extension_exchange"), ["extension_id", "exchange_id"]);
     assert.strictEqual(tool("list_screens").annotations.readOnlyHint, true);
     const assign = tool("assign_playlist").annotations;
     assert.strictEqual(assign.readOnlyHint, false);
     assert.strictEqual(assign.destructiveHint, false);
     assert.strictEqual(assign.idempotentHint, true);
+    for (const name of ["list_extensions", "get_extension"]) {
+      assert.strictEqual(tool(name).annotations.readOnlyHint, true);
+    }
+    for (const name of ["create_extension", "create_extension_exchange"]) {
+      assert.strictEqual(tool(name).annotations.destructiveHint, false);
+    }
+    for (const name of [
+      "delete_screen",
+      "delete_playlist",
+      "delete_extension",
+      "delete_extension_exchange",
+    ]) {
+      const hints = tool(name).annotations;
+      assert.strictEqual(hints.readOnlyHint, false);
+      assert.notStrictEqual(hints.destructiveHint, false);
+      assert.strictEqual(hints.idempotentHint, true);
+    }
   }).pipe(Effect.provide(serve(noTerminus))),
 );
 
@@ -201,6 +233,239 @@ it.effect("creates and replaces screens", () => {
     ),
   );
 });
+
+it.effect("deletes one screen or playlist", () => {
+  const deleted: Array<string> = [];
+
+  return Effect.gen(function* () {
+    const mcp = yield* Testing.mcpClient(Actions);
+
+    const { screen: gone } = yield* mcp.delete_screen({ screen_id: 10 });
+    assert.deepStrictEqual(gone, screen);
+    const { playlist: emptied } = yield* mcp.delete_playlist({ playlist_id: 20 });
+    assert.strictEqual(emptied.id, playlist.id);
+    assert.deepStrictEqual(deleted, ["/api/screens/10", "/api/playlists/20"]);
+  }).pipe(
+    Effect.provide(
+      serve(
+        terminus(({ method, url }) => {
+          if (method !== "DELETE") return undefined;
+          deleted.push(url.pathname);
+          if (url.pathname === "/api/screens/10") return json({ data: screen });
+          if (url.pathname === "/api/playlists/20") return json({ data: playlist });
+          return undefined;
+        }),
+      ),
+    ),
+  );
+});
+
+it.effect("reports a missing resource however Terminus answers for it", () => {
+  const notFound = { type: "about:blank", title: "Not Found", status: 404 };
+  const answers = [
+    json(notFound, 404),
+    json(notFound),
+    json({ data: {} }),
+    json({ data: { id: "not a screen" } }),
+  ];
+
+  return Effect.gen(function* () {
+    const terminus = yield* Terminus;
+    const messages = [];
+    for (const index of answers.keys()) {
+      const error = yield* Effect.flip(terminus.deleteScreen({ screen_id: 900 + index }));
+      messages.push(error.message);
+    }
+    assert.deepStrictEqual(messages, [
+      "Screen 900 was not found.",
+      "Screen 901 was not found.",
+      "Screen 902 was not found.",
+      "Terminus returned an unexpected response.",
+    ]);
+  }).pipe(
+    Effect.provide(
+      terminusLayer(terminus(({ url }) => answers[Number(url.pathname.split("/").at(-1)) - 900])),
+    ),
+  );
+});
+
+it.effect("lists and reads extensions without exchange header values", () =>
+  Effect.gen(function* () {
+    const mcp = yield* Testing.mcpClient(Actions);
+
+    const { extensions } = yield* mcp.list_extensions();
+    assert.deepStrictEqual(extensions, [extension]);
+
+    const result = yield* callTool("get_extension", { extension_id: 50 });
+    assert.strictEqual(result.isError, false);
+    assert.notMatch(JSON.stringify(result), /must-never-leak/);
+    const detail = yield* mcp.get_extension({ extension_id: 50 });
+    assert.deepStrictEqual(detail.extension, extension);
+    assert.deepStrictEqual(detail.exchanges[0]?.header_names, ["Authorization"]);
+    assert.deepStrictEqual(detail.exchanges[0]?.data, exchange.data);
+  }).pipe(Effect.provide(serve(terminus()))),
+);
+
+it.effect("creates extensions and exchanges in the shape Terminus takes", () => {
+  const sent: Array<unknown> = [];
+
+  return Effect.gen(function* () {
+    const mcp = yield* Testing.mcpClient(Actions);
+
+    yield* mcp.create_extension({
+      name: "save-point",
+      label: "Save Point",
+      kind: "static",
+      template: "<div>{{ source_1.games[0] }}</div>",
+      static_body: { games: ["Chrono Trigger"] },
+      interval: 15,
+      unit: "minute",
+      model_ids: [1],
+    });
+    const { exchange: created } = yield* mcp.create_extension_exchange({
+      extension_id: 50,
+      template: "https://api.example.test/games.json",
+      headers: { Authorization: "Bearer must-never-leak" },
+    });
+    assert.deepStrictEqual(created.header_names, ["Authorization"]);
+    assert.notMatch(JSON.stringify(created), /must-never-leak/);
+
+    assert.deepStrictEqual(sent, [
+      {
+        extension: {
+          name: "save-point",
+          label: "Save Point",
+          kind: "static",
+          template: "<div>{{ source_1.games[0] }}</div>",
+          static_body: { games: ["Chrono Trigger"] },
+          interval: 15,
+          unit: "minute",
+        },
+        model_ids: [1],
+      },
+      {
+        exchange: {
+          template: "https://api.example.test/games.json",
+          headers: { Authorization: "Bearer must-never-leak" },
+        },
+      },
+    ]);
+  }).pipe(
+    Effect.provide(
+      serve(
+        terminus(({ method, url, body }) => {
+          if (method !== "POST") return undefined;
+          sent.push(body);
+          if (url.pathname === "/api/extensions") return json({ data: extension });
+          if (url.pathname === "/api/extensions/50/exchanges") return json({ data: exchange });
+          return undefined;
+        }),
+      ),
+    ),
+  );
+});
+
+it.effect("keeps an extension's models, devices and schedule through a partial update", () => {
+  const patches: Array<unknown> = [];
+
+  return Effect.gen(function* () {
+    const mcp = yield* Testing.mcpClient(Actions);
+
+    yield* mcp.update_extension({ extension_id: 50, label: "Renamed" });
+    yield* mcp.update_extension({ extension_id: 50, unit: "hour" });
+    yield* mcp.update_extension({ extension_id: 50, device_ids: [40] });
+    yield* mcp.update_extension_exchange({ extension_id: 50, exchange_id: 60, verb: "post" });
+
+    assert.deepStrictEqual(patches, [
+      {
+        extension: { label: "Renamed", interval: 15, unit: "minute" },
+        model_ids: [1],
+        device_ids: [],
+      },
+      { extension: { interval: 15, unit: "hour" }, model_ids: [1], device_ids: [] },
+      { extension: { interval: 15, unit: "minute" }, model_ids: [1], device_ids: [40] },
+      { exchange: { verb: "post" } },
+    ]);
+  }).pipe(
+    Effect.provide(
+      serve(
+        terminus(({ method, url, body }) => {
+          if (method !== "PATCH") return undefined;
+          patches.push(body);
+          if (url.pathname === "/api/extensions/50") return json({ data: extension });
+          if (url.pathname === "/api/extensions/50/exchanges/60") {
+            return json({ data: exchange });
+          }
+          return undefined;
+        }),
+      ),
+    ),
+  );
+});
+
+it.effect("deletes extensions and exchanges without exchange header values", () =>
+  Effect.gen(function* () {
+    const terminus = yield* Terminus;
+
+    const { extension: deleted } = yield* terminus.deleteExtension({ extension_id: 50 });
+    assert.strictEqual(deleted.id, 50);
+    const { exchange: gone } = yield* terminus.deleteExchange({
+      extension_id: 50,
+      exchange_id: 60,
+    });
+    assert.deepStrictEqual(gone.header_names, ["Authorization"]);
+    assert.notMatch(JSON.stringify(gone), /must-never-leak/);
+  }).pipe(
+    Effect.provide(
+      terminusLayer(
+        terminus(({ method, url }) => {
+          if (method !== "DELETE") return undefined;
+          if (url.pathname === "/api/extensions/50") return json({ data: extension });
+          if (url.pathname === "/api/extensions/50/exchanges/60") return json({ data: exchange });
+          return undefined;
+        }),
+      ),
+    ),
+  ),
+);
+
+it.effect("names each field Terminus refuses", () =>
+  Effect.gen(function* () {
+    const terminus = yield* Terminus;
+    const error = yield* Effect.flip(
+      terminus.createExtension({
+        name: "late",
+        label: "Late",
+        kind: "static",
+        template: "<p></p>",
+        interval: 30,
+        unit: "hour",
+      }),
+    );
+    assert.strictEqual(
+      error.message,
+      'Terminus request failed (HTTP 422): Validation failed. {"extension":{"interval":["must be 0-23"]}}',
+    );
+  }).pipe(
+    Effect.provide(
+      terminusLayer(
+        terminus(({ method }) =>
+          method === "POST"
+            ? json(
+                {
+                  type: "/problem_details#extension_payload",
+                  status: 422,
+                  detail: "Validation failed.",
+                  errors: { extension: { interval: ["must be 0-23"] } },
+                },
+                422,
+              )
+            : undefined,
+        ),
+      ),
+    ),
+  ),
+);
 
 it.effect("saves playlists and selects the first item of a replaced one", () => {
   let patches = 0;
@@ -399,8 +664,8 @@ it.effect("rejects rendered images outside the configured Terminus origin", () =
     Effect.provide(
       terminusLayer(
         terminus(({ url }) =>
-          url.pathname === "/api/screens"
-            ? json({ data: [{ ...screen, uri: "https://attacker.test/image.png" }] })
+          url.pathname === "/api/screens/10"
+            ? json({ data: { ...screen, uri: "https://attacker.test/image.png" } })
             : undefined,
         ),
       ),

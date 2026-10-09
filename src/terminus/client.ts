@@ -22,12 +22,21 @@ import { download } from "../http-client.js";
 import {
   type Assignment,
   type DisplayQuery,
+  type ExchangeInput,
+  type ExchangeRef,
+  type ExchangeUpdate,
+  Extension,
+  type ExtensionInput,
+  type ExtensionRef,
+  type ExtensionUpdate,
   type FrameworkContext,
   ListOf,
   Model,
   OneOf,
+  OneOrMissing,
   Playlist,
   type PlaylistInput,
+  type PlaylistRef,
   SafeDevice,
   Screen,
   type ScreenFilters,
@@ -35,6 +44,7 @@ import {
   type ScreenRef,
   type ScreenUpdate,
   TerminusError,
+  TerminusExchange,
   Tokens,
 } from "./contracts.js";
 
@@ -67,7 +77,7 @@ const unexpected = fail("Terminus returned an unexpected response.");
  * Every failure of one exchange as a TerminusError: a refusal names `refused`, its status and
  * the detail Terminus gave, and the exchange times out after a minute.
  */
-const exchange =
+const asTerminusError =
   (refused: string) =>
   <A, R>(
     effect: Effect.Effect<
@@ -100,6 +110,7 @@ const exchange =
       }),
     );
 
+/** The body of a successful response as `schema`. */
 const json =
   <S extends Schema.Constraint & { readonly DecodingServices: never }>(schema: S) =>
   (response: HttpClientResponse.HttpClientResponse) =>
@@ -126,7 +137,7 @@ const make = Effect.gen(function* () {
         HttpClientRequest.bodyJsonUnsafe({ login: user, password: Redacted.value(password) }),
       ),
     )
-    .pipe(Effect.flatMap(json(Tokens)), exchange("Terminus login failed"));
+    .pipe(Effect.flatMap(json(Tokens)), asTerminusError("Terminus login failed"));
 
   // A refresh Terminus refuses, or that fails at all, falls back to a new login.
   const refresh = (current: typeof Tokens.Type) =>
@@ -139,7 +150,7 @@ const make = Effect.gen(function* () {
       )
       .pipe(
         Effect.flatMap(json(Tokens)),
-        exchange("Terminus token refresh failed"),
+        asTerminusError("Terminus token refresh failed"),
         Effect.catch(() => login),
       );
 
@@ -162,13 +173,8 @@ const make = Effect.gen(function* () {
     Effect.map(({ access_token }) => access_token),
   );
 
-  /** A request with the current token, retried once with a renewed one if Terminus says it expired. */
-  const api = <S extends Schema.Constraint & { readonly DecodingServices: never }>(
-    method: "GET" | "POST" | "PATCH",
-    path: string,
-    schema: S,
-    body?: unknown,
-  ) => {
+  /** A request with the current token, sent again with a renewed one if Terminus says it expired. */
+  const respond = (method: "GET" | "POST" | "PATCH" | "DELETE", path: string, body?: unknown) => {
     const send = (token: string) => {
       const request = HttpClientRequest.make(method)(path).pipe(
         HttpClientRequest.setHeader("Authorization", token),
@@ -184,11 +190,38 @@ const make = Effect.gen(function* () {
       const expired =
         response.status === 401 ||
         (response.status === 400 && (yield* response.text).includes("expired JWT access token"));
-      return yield* json(schema)(
-        expired ? yield* send((yield* renew(token)).access_token) : response,
-      );
-    }).pipe(exchange("Terminus request failed"));
+      return expired ? yield* send((yield* renew(token)).access_token) : response;
+    });
   };
+
+  const api = <S extends Schema.Constraint & { readonly DecodingServices: never }>(
+    method: "GET" | "POST" | "PATCH" | "DELETE",
+    path: string,
+    schema: S,
+    body?: unknown,
+  ) =>
+    respond(method, path, body).pipe(
+      Effect.flatMap(json(schema)),
+      asTerminusError("Terminus request failed"),
+    );
+
+  /** The one `item` at `path`, read, changed or deleted; `what` was not found if Terminus says so. */
+  const one = <A>(
+    method: "GET" | "PATCH" | "DELETE",
+    path: string,
+    item: Schema.Codec<A, unknown>,
+    what: string,
+    body?: unknown,
+  ) =>
+    respond(method, path, body).pipe(
+      Effect.flatMap((response) =>
+        response.status === 404 ? Effect.succeed(null) : json(OneOrMissing(item))(response),
+      ),
+      asTerminusError("Terminus request failed"),
+      Effect.flatMap((found) =>
+        found === null ? fail(`${what} was not found.`) : Effect.succeed(found.data),
+      ),
+    );
 
   const devices = api("GET", "api/devices", ListOf(SafeDevice));
   const models = api("GET", "api/models", ListOf(Model));
@@ -244,9 +277,7 @@ const make = Effect.gen(function* () {
   const getScreenImage = Effect.fn("Terminus.getScreenImage")(function* ({
     screen_id: screenId,
   }: ScreenRef) {
-    const { screens } = yield* listScreens({});
-    const screen = screens.find(({ id }) => id === screenId);
-    if (!screen) return yield* fail(`Screen ${screenId} was not found.`);
+    const screen = yield* one("GET", `api/screens/${screenId}`, Screen, `Screen ${screenId}`);
 
     const url = new URL(screen.uri, baseUrl);
     if (url.origin !== new URL(baseUrl).origin || !url.pathname.startsWith("/uploads/")) {
@@ -264,7 +295,7 @@ const make = Effect.gen(function* () {
             : "The screen image exceeds the 10 MiB limit.",
         ),
       ),
-      exchange("Screen image fetch failed"),
+      asTerminusError("Screen image fetch failed"),
     );
     return { screen, image: { data: body, mimeType: type } };
   });
@@ -290,6 +321,13 @@ const make = Effect.gen(function* () {
       screen: { label, mode, content: html },
     });
     return { screen: data };
+  });
+
+  const deleteScreen = Effect.fn("Terminus.deleteScreen")(function* ({
+    screen_id: screenId,
+  }: ScreenRef) {
+    const path = `api/screens/${screenId}`;
+    return { screen: yield* one("DELETE", path, Screen, `Screen ${screenId}`) };
   });
 
   const savePlaylist = Effect.fn("Terminus.savePlaylist")(function* (input: PlaylistInput) {
@@ -328,6 +366,13 @@ const make = Effect.gen(function* () {
     return { action: "updated" as const, playlist: selected };
   });
 
+  const deletePlaylist = Effect.fn("Terminus.deletePlaylist")(function* ({
+    playlist_id: playlistId,
+  }: PlaylistRef) {
+    const path = `api/playlists/${playlistId}`;
+    return { playlist: yield* one("DELETE", path, Playlist, `Playlist ${playlistId}`) };
+  });
+
   const assignPlaylist = Effect.fn("Terminus.assignPlaylist")(function* ({
     device_id: deviceId,
     playlist_id,
@@ -338,6 +383,86 @@ const make = Effect.gen(function* () {
     return { device: data };
   });
 
+  const extensionPath = (id: number) => `api/extensions/${id}`;
+  const oneExtension = (method: "GET" | "PATCH" | "DELETE", id: number, body?: unknown) =>
+    one(method, extensionPath(id), Extension, `Extension ${id}`, body);
+  const oneExchange = (
+    method: "PATCH" | "DELETE",
+    { extension_id, exchange_id }: ExchangeRef,
+    body?: unknown,
+  ) =>
+    one(
+      method,
+      `${extensionPath(extension_id)}/exchanges/${exchange_id}`,
+      TerminusExchange,
+      `Exchange ${exchange_id} of extension ${extension_id}`,
+      body,
+    ).pipe(Effect.map(redacted));
+
+  const listExtensions = () =>
+    api("GET", "api/extensions", ListOf(Extension)).pipe(
+      Effect.map(({ data }) => ({ extensions: data })),
+    );
+
+  const getExtension = Effect.fn("Terminus.getExtension")(function* ({
+    extension_id: extensionId,
+  }: ExtensionRef) {
+    const extension = yield* oneExtension("GET", extensionId);
+    const path = `${extensionPath(extensionId)}/exchanges`;
+    const { data: exchanges } = yield* api("GET", path, ListOf(TerminusExchange));
+    return { extension, exchanges: exchanges.map(redacted) };
+  });
+
+  const createExtension = Effect.fn("Terminus.createExtension")(function* (input: ExtensionInput) {
+    const { model_ids, device_ids, ...extension } = input;
+    const { data } = yield* api("POST", "api/extensions", OneOf(Extension), {
+      extension,
+      model_ids,
+      device_ids,
+    });
+    return { extension: data };
+  });
+
+  // Terminus clears the models and devices a patch omits, checks a schedule's interval and unit
+  // only together, and refuses an empty extension, so each patch carries the current models,
+  // devices and schedule unless the input replaces them.
+  const updateExtension = Effect.fn("Terminus.updateExtension")(function* (input: ExtensionUpdate) {
+    const { extension_id: extensionId, model_ids, device_ids, ...changes } = input;
+    const current = yield* oneExtension("GET", extensionId);
+    const extension = yield* oneExtension("PATCH", extensionId, {
+      extension: {
+        ...changes,
+        interval: changes.interval ?? current.interval,
+        unit: changes.unit ?? current.unit,
+      },
+      model_ids: model_ids ?? current.model_ids,
+      device_ids: device_ids ?? current.device_ids,
+    });
+    return { extension };
+  });
+
+  const deleteExtension = Effect.fn("Terminus.deleteExtension")(function* ({
+    extension_id: extensionId,
+  }: ExtensionRef) {
+    return { extension: yield* oneExtension("DELETE", extensionId) };
+  });
+
+  const createExchange = Effect.fn("Terminus.createExchange")(function* (input: ExchangeInput) {
+    const { extension_id: extensionId, ...exchange } = input;
+    const path = `${extensionPath(extensionId)}/exchanges`;
+    const { data } = yield* api("POST", path, OneOf(TerminusExchange), { exchange });
+    return { exchange: redacted(data) };
+  });
+
+  const updateExchange = Effect.fn("Terminus.updateExchange")(function* (input: ExchangeUpdate) {
+    const { extension_id, exchange_id, ...exchange } = input;
+    return { exchange: yield* oneExchange("PATCH", { extension_id, exchange_id }, { exchange }) };
+  });
+
+  const deleteExchange = Effect.fn("Terminus.deleteExchange")(function* (ref: ExchangeRef) {
+    return { exchange: yield* oneExchange("DELETE", ref) };
+  });
+
   // Each method takes its action's input and answers with its success.
   return {
     getDisplayContext,
@@ -346,8 +471,18 @@ const make = Effect.gen(function* () {
     listPlaylists: () => Effect.map(playlists, (all) => ({ playlists: all })),
     createScreen,
     updateScreen,
+    deleteScreen,
     savePlaylist,
+    deletePlaylist,
     assignPlaylist,
+    listExtensions,
+    getExtension,
+    createExtension,
+    updateExtension,
+    deleteExtension,
+    createExchange,
+    updateExchange,
+    deleteExchange,
   };
 });
 
@@ -356,15 +491,33 @@ export class Terminus extends Context.Service<Terminus>()("terminus-mcp/Terminus
   static readonly layer = Layer.effect(Terminus, Terminus.make);
 }
 
-/** The detail a refusal gives, as JSON `detail` or `error` or as plain text, if it is short. */
+/** A JSON refusal; a validation problem names each field's errors. */
+const decodeProblem = Schema.decodeUnknownOption(
+  Schema.fromJsonString(
+    Schema.Struct({
+      detail: Schema.optionalKey(Schema.String),
+      error: Schema.optionalKey(Schema.String),
+      errors: Schema.optionalKey(Schema.Json),
+    }),
+  ),
+);
+
+/** The detail a JSON refusal gives, cut to 500 characters. */
 function detail(text: string): string {
-  let found = text;
-  try {
-    const parsed = JSON.parse(text) as { detail?: unknown; error?: unknown };
-    const candidate = parsed.detail ?? parsed.error;
-    found = typeof candidate === "string" ? candidate : "";
-  } catch {}
-  return found && found.length <= 300 ? `: ${found}` : "";
+  const found = Option.match(decodeProblem(text), {
+    onNone: () => "",
+    onSome: ({ detail, error, errors }) =>
+      [detail ?? error, errors === undefined ? undefined : JSON.stringify(errors)]
+        .filter(Boolean)
+        .join(" "),
+  });
+  if (!found) return "";
+  return `: ${found.length > 500 ? `${found.slice(0, 499)}…` : found}`;
+}
+
+/** An exchange with its header names only. */
+function redacted({ headers, ...exchange }: typeof TerminusExchange.Type) {
+  return { ...exchange, header_names: Object.keys(headers ?? {}) };
 }
 
 function onlyDevice(devices: ReadonlyArray<SafeDevice>) {
