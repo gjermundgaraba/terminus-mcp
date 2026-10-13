@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.2
+
+Built on Effect `4.0.4` and `@gjermundgaraba/effect-actions` `0.14.0`.
+
+### Changes
+
+- An npm install installs one `effect`. `@effect/platform-node` takes
+  `@effect/platform-node-shared` by caret, and Effect `4.0.4`'s requires `effect` `^4.0.4`, so an
+  install of `0.3.1` or earlier since then put a second `effect` under it. The package now depends
+  on `@effect/platform-node-shared` at its own `effect` version.
+- A width or height's `minimum: 0` is back beside the safe-integer `maximum` instead of in an
+  `allOf`, and an id's `exclusiveMinimum: 0` replaces the safe-integer `minimum`, as Effect
+  `4.0.4` tightens colliding bounds in place. The values a tool accepts are unchanged.
+
 ## 0.3.1
 
 Built on Effect `4.0.3` and `@gjermundgaraba/effect-actions` `0.13.0`.
