@@ -185,8 +185,8 @@ importers:
         specifier: 4.0.2
         version: 4.0.2(effect@4.0.2)(redis@6.3.0)
       '@gjermundgaraba/effect-actions':
-        specifier: 0.11.0
-        version: 0.11.0(effect@4.0.2)
+        specifier: 0.12.0
+        version: 0.12.0(effect@4.0.2)
       effect:
         specifier: 4.0.2
         version: 4.0.2
@@ -405,8 +405,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@gjermundgaraba/effect-actions@0.11.0':
-    resolution: {integrity: sha512-ycGib6YHaZSEOG4ofclB9bKvjKL2CmC6B+BO9B99waGweYbDydQRbUOA96PzASSv0C2eVWFREjAhCD0klZ0/cA==}
+  '@gjermundgaraba/effect-actions@0.12.0':
+    resolution: {integrity: sha512-KvY5f/Cr0tsASRjG03BreV0rfD2r421XcTKjqKGgbLHeMe94q/3kKs67qj22x/DegVHxDsUm5myA+S/9DKuQnw==}
     engines: {node: ^22.12.0 || ^24.0.0 || >=26.0.0}
     peerDependencies:
       effect: ~4.0.2
@@ -1689,7 +1689,7 @@ snapshots:
   '@esbuild/win32-x64@0.28.1':
     optional: true
 
-  '@gjermundgaraba/effect-actions@0.11.0(effect@4.0.2)':
+  '@gjermundgaraba/effect-actions@0.12.0(effect@4.0.2)':
     dependencies:
       effect: 4.0.2
 

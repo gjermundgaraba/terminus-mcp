@@ -38,7 +38,7 @@
   },
   "dependencies": {
     "@effect/platform-node": "4.0.2",
-    "@gjermundgaraba/effect-actions": "0.11.0",
+    "@gjermundgaraba/effect-actions": "0.12.0",
     "effect": "4.0.2"
   },
   "devDependencies": {
