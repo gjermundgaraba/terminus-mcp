@@ -128,10 +128,14 @@ results, or intentionally written to logs. Inject them with the MCP host's
 secret-management facility instead of committing them to its configuration.
 
 For remote MCP clients, use `http://<host>:8002/mcp`. It speaks MCP
-`2026-07-28` only; a host on an earlier revision runs the stdio server, which
-also speaks `2025-11-25` and `2025-06-18`. `/healthz` provides a container
-health check. The HTTP endpoint has no application-level authentication and
-must remain on an access-controlled internal network.
+`2026-07-28`, `2025-11-25` and `2025-06-18`, as the stdio server does. A client
+on a 2025 revision opens a session, which lasts until the client ends it or the
+server stops. The tools never change after startup: a `2026-07-28` client
+cannot subscribe to them, and a 2025 session, though told they may change,
+never hears that they have. `/healthz` provides a container health check. The
+HTTP endpoint has no application-level authentication, so whoever reaches it can
+call every tool and open sessions: it must remain on an access-controlled
+internal network.
 
 ## Verification
 

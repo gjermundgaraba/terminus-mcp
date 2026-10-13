@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.3
+
+Built on Effect `4.0.4` and `@gjermundgaraba/effect-actions` `0.15.0`.
+
+### Changes
+
+- The HTTP endpoint tells a `2026-07-28` client its tool list does not change, with
+  `listChanged: false` in `server/discover`, and refuses `subscriptions/listen` as method not
+  found: the tools are fixed at startup. A `2025-11-25` or `2025-06-18` session's `initialize`
+  still advertises `listChanged: true`, as Effect leaves those revisions unchanged; no change is
+  ever sent.
+- The README says what the HTTP endpoint serves: MCP `2026-07-28`, `2025-11-25` and
+  `2025-06-18`, with a session for a 2025 client until it ends it or the server stops. The `0.2.0`
+  entry's "`2026-07-28` only" stopped being true in `0.3.1`, built on effect-actions `0.13.0`,
+  as effect-actions `0.12.0` added the 2025 revisions over HTTP.
+
 ## 0.3.2
 
 Built on Effect `4.0.4` and `@gjermundgaraba/effect-actions` `0.14.0`.

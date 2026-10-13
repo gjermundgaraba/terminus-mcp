@@ -16,6 +16,24 @@ it.effect("serves a health check beside the MCP endpoint", () =>
   }).pipe(Effect.provide(serve(noTerminus))),
 );
 
+it.effect("advertises no tool-list changes and refuses subscriptions", () =>
+  Effect.gen(function* () {
+    const discovered = (yield* (yield* send("server/discover")).json) as {
+      readonly result: { readonly capabilities: { readonly tools: unknown } };
+    };
+    assert.deepStrictEqual(discovered.result.capabilities.tools, { listChanged: false });
+
+    // The refusal arrives as the one event of a text/event-stream body.
+    const listen = yield* send("subscriptions/listen", {
+      notifications: { toolsListChanged: true },
+    });
+    const event = JSON.parse((yield* listen.text).replace(/^data: /m, "")) as {
+      readonly error: { readonly code: number };
+    };
+    assert.strictEqual(event.error.code, -32601);
+  }).pipe(Effect.provide(serve(noTerminus))),
+);
+
 it.effect("admits only the configured browser origins", () =>
   Effect.gen(function* () {
     const listTools = (origin: string) =>
