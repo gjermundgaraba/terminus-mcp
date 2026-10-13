@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.1
+
+Built on Effect `4.0.3` and `@gjermundgaraba/effect-actions` `0.13.0`.
+
+### Changes
+
+- An integer parameter's JSON Schema carries the safe-integer range, as Effect `4.0.3`'s
+  `Schema.Int` advertises it. A width or height's `minimum: 0` moves into an `allOf`; an id's
+  `exclusiveMinimum: 0` stays beside the range. The values a tool accepts are unchanged.
+
 ## 0.3.0
 
 Supports Terminus `0.77.0`, with deletion and extensions: twenty tools, up from ten.
