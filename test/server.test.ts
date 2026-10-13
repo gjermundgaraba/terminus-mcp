@@ -1,6 +1,6 @@
 import { assert, it } from "@effect/vitest";
 import { Effect, Layer, Schema } from "effect";
-import * as Testing from "@gjermundgaraba/effect-actions/Testing";
+import * as ActionMcp from "@gjermundgaraba/effect-actions/ActionMcp";
 
 import { ScreenDocs } from "../src/docs.js";
 import { Actions } from "../src/server.js";
@@ -36,7 +36,7 @@ interface ToolResult {
 }
 
 /** One JSON-RPC request to /mcp, answered with its `result`. */
-const rpc = <A>(method: string, params?: Testing.McpParams) =>
+const rpc = <A>(method: string, params?: ActionMcp.Params) =>
   Effect.gen(function* () {
     const response = yield* send(method, params);
     return ((yield* response.json) as { readonly result: A }).result;
@@ -112,7 +112,7 @@ it.effect("redacts device credentials and reuses one login", () => {
   let logins = 0;
 
   return Effect.gen(function* () {
-    const mcp = yield* Testing.mcpClient(Actions);
+    const mcp = yield* ActionMcp.client(Actions);
 
     const context = yield* callTool("get_display_context", {});
     assert.notMatch(JSON.stringify(context), /api_key|mac_address|must-never|e0:72/i);
@@ -150,7 +150,7 @@ it.effect("redacts device credentials and reuses one login", () => {
 
 it.effect("returns a screen's rendered image beside its record", () =>
   Effect.gen(function* () {
-    const mcp = yield* Testing.mcpClient(Actions);
+    const mcp = yield* ActionMcp.client(Actions);
 
     const image = yield* mcp.get_screen_image({ screen_id: 10 });
     assert.strictEqual(image.screen.id, 10);
@@ -171,7 +171,7 @@ it.effect("creates and replaces screens", () => {
   let patches = 0;
 
   return Effect.gen(function* () {
-    const mcp = yield* Testing.mcpClient(Actions);
+    const mcp = yield* ActionMcp.client(Actions);
 
     // Sent raw: the typed client encodes, and refuses untrimmed text; the server trims it.
     const created = yield* callTool("create_screen", {
@@ -238,7 +238,7 @@ it.effect("deletes one screen or playlist", () => {
   const deleted: Array<string> = [];
 
   return Effect.gen(function* () {
-    const mcp = yield* Testing.mcpClient(Actions);
+    const mcp = yield* ActionMcp.client(Actions);
 
     const { screen: gone } = yield* mcp.delete_screen({ screen_id: 10 });
     assert.deepStrictEqual(gone, screen);
@@ -291,7 +291,7 @@ it.effect("reports a missing resource however Terminus answers for it", () => {
 
 it.effect("lists and reads extensions without exchange header values", () =>
   Effect.gen(function* () {
-    const mcp = yield* Testing.mcpClient(Actions);
+    const mcp = yield* ActionMcp.client(Actions);
 
     const { extensions } = yield* mcp.list_extensions();
     assert.deepStrictEqual(extensions, [extension]);
@@ -310,7 +310,7 @@ it.effect("creates extensions and exchanges in the shape Terminus takes", () => 
   const sent: Array<unknown> = [];
 
   return Effect.gen(function* () {
-    const mcp = yield* Testing.mcpClient(Actions);
+    const mcp = yield* ActionMcp.client(Actions);
 
     yield* mcp.create_extension({
       name: "save-point",
@@ -369,7 +369,7 @@ it.effect("keeps an extension's models, devices and schedule through a partial u
   const patches: Array<unknown> = [];
 
   return Effect.gen(function* () {
-    const mcp = yield* Testing.mcpClient(Actions);
+    const mcp = yield* ActionMcp.client(Actions);
 
     yield* mcp.update_extension({ extension_id: 50, label: "Renamed" });
     yield* mcp.update_extension({ extension_id: 50, unit: "hour" });
@@ -472,7 +472,7 @@ it.effect("saves playlists and selects the first item of a replaced one", () => 
   const items = [{ ...playlist.items[0], id: 31 }];
 
   return Effect.gen(function* () {
-    const mcp = yield* Testing.mcpClient(Actions);
+    const mcp = yield* ActionMcp.client(Actions);
 
     const created = yield* mcp.save_playlist({
       name: "agent",
@@ -549,7 +549,7 @@ it.effect("saves playlists and selects the first item of a replaced one", () => 
 
 it.effect("searches and reads the screen docs from one catalog", () =>
   Effect.gen(function* () {
-    const mcp = yield* Testing.mcpClient(Actions);
+    const mcp = yield* ActionMcp.client(Actions);
     const catalogFetches = docsFetches.get("https://trmnl.com/framework") ?? 0;
 
     const { docs } = yield* mcp.search_screen_docs();

@@ -1,5 +1,6 @@
 import { assert } from "@effect/vitest";
 import * as Testing from "@gjermundgaraba/effect-actions/Testing";
+import * as ActionMcp from "@gjermundgaraba/effect-actions/ActionMcp";
 import { ConfigProvider, Effect, Layer } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/http";
 
@@ -65,9 +66,9 @@ export const serve = (
 /** One MCP request to the served routes, with `headers`, answered with the response as sent. */
 export const send = (
   method: string,
-  params?: Testing.McpParams,
+  params?: ActionMcp.Params,
   headers: Record<string, string> = {},
-) => HttpClient.execute(Testing.mcpRequest(method, params, { headers }));
+) => HttpClient.execute(ActionMcp.request(method, params, { headers }));
 
 export const json = (body: unknown, status = 200) => Response.json(body, { status });
 
