@@ -34,8 +34,7 @@ export const routes = Layer.unwrap(
     );
 
     return Layer.mergeAll(
-      // The tools are the contract's, fixed at startup: there is no change to subscribe to.
-      ActionMcp.layerHttp(actions, { ...server, allowedOrigins, allowSubscriptions: false }),
+      ActionMcp.layerHttp(actions, { ...server, allowedOrigins }),
       HttpRouter.add("GET", "/healthz", HttpServerResponse.jsonUnsafe({ status: "ok" })),
     );
   }),
