@@ -16,8 +16,4 @@ catalog:
   vitest: 5.0.5
 # These releases are newer than pnpm's default one-day release age; drop them once they are not.
 minimumReleaseAgeExclude:
-  - "@effect/platform-node-shared@4.0.4"
-  - "@effect/platform-node@4.0.4"
-  - "@effect/vitest@4.0.4"
-  - "@gjermundgaraba/effect-actions@0.16.0"
-  - effect@4.0.4
+  - "@gjermundgaraba/effect-actions@0.18.2"
