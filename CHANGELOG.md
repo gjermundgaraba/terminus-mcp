@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.4
+
+Built on Effect `4.0.5` and `@gjermundgaraba/effect-actions` `0.18.2`.
+
+### Changes
+
+- The container image runs Node `26.12.0` on Debian trixie, where it ran Node 24 on bookworm.
+  The npm package still runs on Node `24.11` or later, and CI tests that floor beside `26.12.0`.
+- The tools, their schemas and the MCP revisions served are as in `0.3.3`.
+
 ## 0.3.3
 
 Built on Effect `4.0.4` and `@gjermundgaraba/effect-actions` `0.15.0`.
