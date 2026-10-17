@@ -164,6 +164,21 @@ settings:
 
 catalogs:
   default:
+    '@effect/platform-node':
+      specifier: 4.0.5
+      version: 4.0.5
+    '@effect/platform-node-shared':
+      specifier: 4.0.5
+      version: 4.0.5
+    '@effect/vitest':
+      specifier: 4.0.5
+      version: 4.0.5
+    '@gjermundgaraba/effect-actions':
+      specifier: 0.18.2
+      version: 0.18.2
+    effect:
+      specifier: 4.0.5
+      version: 4.0.5
     vite:
       specifier: npm:@voidzero-dev/vite-plus-core@1.3.0
       version: 1.3.0
@@ -183,20 +198,20 @@ importers:
   .:
     dependencies:
       '@effect/platform-node':
-        specifier: 4.0.5
+        specifier: 'catalog:'
         version: 4.0.5(effect@4.0.5)(redis@6.3.0)
       '@effect/platform-node-shared':
-        specifier: 4.0.5
+        specifier: 'catalog:'
         version: 4.0.5(effect@4.0.5)
       '@gjermundgaraba/effect-actions':
-        specifier: 0.18.2
+        specifier: 'catalog:'
         version: 0.18.2(effect@4.0.5)
       effect:
-        specifier: 4.0.5
+        specifier: 'catalog:'
         version: 4.0.5
     devDependencies:
       '@effect/vitest':
-        specifier: 4.0.5
+        specifier: 'catalog:'
         version: 4.0.5(effect@4.0.5)(vitest@5.0.5)
       '@types/node':
         specifier: ^26.0.0

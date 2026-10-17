@@ -37,13 +37,13 @@
     "verify:live": "tsx test/live.ts"
   },
   "dependencies": {
-    "@effect/platform-node": "4.0.5",
-    "@effect/platform-node-shared": "4.0.5",
-    "@gjermundgaraba/effect-actions": "0.18.2",
-    "effect": "4.0.5"
+    "@effect/platform-node": "catalog:",
+    "@effect/platform-node-shared": "catalog:",
+    "@gjermundgaraba/effect-actions": "catalog:",
+    "effect": "catalog:"
   },
   "devDependencies": {
-    "@effect/vitest": "4.0.5",
+    "@effect/vitest": "catalog:",
     "@types/node": "^26.0.0",
     "tsx": "4.23.15",
     "typescript": "7.0.2",
