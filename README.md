@@ -155,7 +155,8 @@ The live check calls every action in process against the Terminus in
 temporary screen, playlist, and unscheduled extension, with an exchange that
 fetches the Terminus health check, and assigns the device's existing playlist
 back to itself. It deletes the temporary objects with the delete tools, or
-directly if the run fails first.
+directly if the run fails first. Set `TERMINUS_DEVICE_ID` when Terminus has more
+than one device.
 
 ## License
 

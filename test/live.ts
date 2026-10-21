@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 
 import { NodeRuntime } from "@effect/platform-node";
-import { Effect, flow, Layer, Redacted } from "effect";
+import { Config, Effect, flow, Layer, Option, Redacted } from "effect";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 import * as Action from "@gjermundgaraba/effect-actions/Action";
 
@@ -15,7 +15,10 @@ const created: { screen?: number; playlist?: number; extension?: number } = {};
 const verify = Effect.gen(function* () {
   const terminus = yield* Action.client(actions);
 
-  const { context } = yield* terminus.get_display_context();
+  const deviceId = yield* Config.option(Config.Int("TERMINUS_DEVICE_ID"));
+  const { context } = yield* terminus.get_display_context(
+    Option.match(deviceId, { onNone: () => ({}), onSome: (device_id) => ({ device_id }) }),
+  );
   const { device, model, framework } = context;
   const originalPlaylistId = device.playlist_id;
   assert.ok(
