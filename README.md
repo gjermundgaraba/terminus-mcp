@@ -10,7 +10,7 @@ HTTP. It needs Node.js 24.11 or newer.
 ## Status
 
 The curated publishing API is implemented and verified against Terminus
-`0.77.0`. See [docs/design.md](docs/design.md) for the API boundary and security
+`0.78.0`. See [docs/design.md](docs/design.md) for the API boundary and security
 model.
 
 The server exposes these tools:

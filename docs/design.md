@@ -9,14 +9,14 @@ It will cover screen creation, playlist management, extensions, safe
 discovery, and one narrow device mutation: assigning a playlist.
 Authentication remains an internal implementation detail.
 
-This design targets Terminus `0.77.0`. Terminus marks its server API as
+This design targets Terminus `0.78.0`. Terminus marks its server API as
 evolving, so compatibility with a release is tested rather than assumed.
 
 References:
 
-- [Terminus API](https://github.com/usetrmnl/terminus/blob/0.77.0/doc/api.adoc)
-- [Terminus routes](https://github.com/usetrmnl/terminus/blob/0.77.0/config/routes.rb)
-- [Terminus HTML sanitizer](https://github.com/usetrmnl/terminus/blob/0.77.0/config/sanitize.yml)
+- [Terminus API](https://github.com/usetrmnl/terminus/blob/0.78.0/doc/api.adoc)
+- [Terminus routes](https://github.com/usetrmnl/terminus/blob/0.78.0/config/routes.rb)
+- [Terminus HTML sanitizer](https://github.com/usetrmnl/terminus/blob/0.78.0/config/sanitize.yml)
 - [effect-actions](https://github.com/gjermundgaraba/effect-actions)
 
 ## Goals
@@ -257,7 +257,9 @@ size limit beyond the call's timeout.
   replacement explicit and avoid presenting it as an additive update.
 - `GET /api/screens/:id` answers a missing screen with HTTP 200 and a 404
   problem as its body.
-- There is no scoped token or service-account API in Terminus `0.77.0`.
+- A `manual` playlist stays on its current screen until the device's button
+  moves it; before `0.78.0` every refresh advanced it, as for `automatic`.
+- There is no scoped token or service-account API in Terminus `0.78.0`.
 - Extension and exchange reads answer a missing resource like screens do;
   patches and deletes answer it with HTTP 404, and a playlist delete with
   empty `data`. A missing extension's exchange list is empty.

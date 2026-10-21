@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+Supports Terminus `0.78.0`. `0.77.0` still works: the endpoints and fields the tools use are
+unchanged.
+
+### Changes
+
+- `save_playlist` describes its `mode`. On Terminus `0.78.0` a `manual` playlist stays on its
+  current screen until the device's button moves it; `automatic` moves on every refresh, as both
+  modes did on `0.77.0`.
+
 ## 0.3.4
 
 Built on Effect `4.0.5` and `@gjermundgaraba/effect-actions` `0.18.2`.

@@ -97,7 +97,11 @@ const PlaylistItem = Schema.Struct({
   updated_at: Schema.String,
 });
 
-const PlaylistMode = Schema.Literals(["automatic", "manual"]);
+const PlaylistMode = Schema.Literals(["automatic", "manual"]).annotate({
+  description:
+    "automatic moves to the next screen on every device refresh; manual stays on the " +
+    "current screen until the device's button moves it.",
+});
 
 export const Playlist = Schema.Struct({
   id: PositiveInt,
