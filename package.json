@@ -26,15 +26,15 @@
   "scripts": {
     "build": "vp pack",
     "check": "vp check",
-    "dev": "tsx src/index.ts",
-    "dev:http": "tsx src/http.ts",
+    "dev": "vpx src/index.ts",
+    "dev:http": "vpx src/http.ts",
     "prepare": "vp config",
     "prepublishOnly": "vp pack",
     "ready": "vp check && vp test run && vp pack",
     "start": "node dist/index.mjs",
     "start:http": "node dist/http.mjs",
     "test": "vp test run",
-    "verify:live": "tsx test/live.ts"
+    "verify:live": "vpx test/live.ts"
   },
   "dependencies": {
     "@effect/platform-node": "catalog:",
@@ -45,7 +45,6 @@
   "devDependencies": {
     "@effect/vitest": "catalog:",
     "@types/node": "^26.0.0",
-    "tsx": "4.23.15",
     "typescript": "7.0.2",
     "vite": "catalog:",
     "vite-plus": "catalog:",
