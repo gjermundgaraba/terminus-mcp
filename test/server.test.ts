@@ -83,16 +83,16 @@ it.effect("lists the curated tools with their hints", () =>
     const required = (name: string) => (tool(name).inputSchema as { required?: unknown }).required;
     assert.deepStrictEqual(required("update_extension"), ["extension_id"]);
     assert.deepStrictEqual(required("update_extension_exchange"), ["extension_id", "exchange_id"]);
-    assert.strictEqual(tool("list_screens").annotations.readOnlyHint, true);
+    assert.strictEqual(tool("list_screens").annotations["readOnlyHint"], true);
     const assign = tool("assign_playlist").annotations;
-    assert.strictEqual(assign.readOnlyHint, false);
-    assert.strictEqual(assign.destructiveHint, false);
-    assert.strictEqual(assign.idempotentHint, true);
+    assert.strictEqual(assign["readOnlyHint"], false);
+    assert.strictEqual(assign["destructiveHint"], false);
+    assert.strictEqual(assign["idempotentHint"], true);
     for (const name of ["list_extensions", "get_extension"]) {
-      assert.strictEqual(tool(name).annotations.readOnlyHint, true);
+      assert.strictEqual(tool(name).annotations["readOnlyHint"], true);
     }
     for (const name of ["create_extension", "create_extension_exchange"]) {
-      assert.strictEqual(tool(name).annotations.destructiveHint, false);
+      assert.strictEqual(tool(name).annotations["destructiveHint"], false);
     }
     for (const name of [
       "delete_screen",
@@ -101,9 +101,9 @@ it.effect("lists the curated tools with their hints", () =>
       "delete_extension_exchange",
     ]) {
       const hints = tool(name).annotations;
-      assert.strictEqual(hints.readOnlyHint, false);
-      assert.notStrictEqual(hints.destructiveHint, false);
-      assert.strictEqual(hints.idempotentHint, true);
+      assert.strictEqual(hints["readOnlyHint"], false);
+      assert.notStrictEqual(hints["destructiveHint"], false);
+      assert.strictEqual(hints["idempotentHint"], true);
     }
   }).pipe(Effect.provide(serve(noTerminus))),
 );

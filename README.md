@@ -5,7 +5,7 @@ An MCP server for agents that create and publish content to a
 
 The tools are [effect-actions](https://github.com/gjermundgaraba/effect-actions)
 actions on [Effect](https://effect.website) v4, served over stdio or Streamable
-HTTP. It needs Node.js 24.11 or newer.
+HTTP. It needs Node.js 26 or newer.
 
 ## Status
 

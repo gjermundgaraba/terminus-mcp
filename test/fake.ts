@@ -25,7 +25,7 @@ export const fakeHttp = (respond: (request: Sent) => Response) =>
           respond({
             method: request.method,
             url,
-            authorization: request.headers.authorization,
+            authorization: request.headers["authorization"],
             body:
               request.body._tag === "Uint8Array"
                 ? JSON.parse(new TextDecoder().decode(request.body.body))

@@ -1,9 +1,13 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
 
 Supports Terminus `0.78.0`. `0.77.0` still works: the endpoints and fields the tools use are
 unchanged.
+
+### Breaking changes
+
+- Requires Node `26` or later, where it ran on Node `24.11.0` and later.
 
 ### Changes
 

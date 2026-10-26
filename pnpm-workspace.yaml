@@ -20,6 +20,7 @@ catalog:
   vite-plus: 1.4.0
   vitest: 5.0.5
 catalogMode: prefer
+saveExact: true
 minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
   - vite-plus
