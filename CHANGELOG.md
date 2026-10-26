@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Breaking changes
+
+- Requires Node `26.12` or later, where it ran on any Node `26`.
+
 ## 0.4.0
 
 Built on Effect `4.0.6` and `@gjermundgaraba/effect-actions` `0.20.0`. Supports Terminus `0.78.0`. `0.77.0` still works: the endpoints and fields the tools use are

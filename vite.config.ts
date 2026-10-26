@@ -10,7 +10,7 @@ export default defineConfig({
     platform: "node",
   },
   test: {
-    globalSetup: ["test/build.ts"],
+    globalSetup: ["tests/build.ts"],
   },
   staged: {
     "*": "vp check --fix",
