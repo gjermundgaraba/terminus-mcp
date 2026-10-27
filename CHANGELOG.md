@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+Built on Effect `4.0.6` and `@gjermundgaraba/effect-actions` `0.21.0`.
+
 ### Breaking changes
 
 - Requires Node `26.12` or later, where it ran on any Node `26`.
