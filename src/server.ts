@@ -1,8 +1,13 @@
-import { Effect, Layer, Schema } from "effect";
 import * as Action from "@gjermundgaraba/effect-actions/Action";
+import { Effect, Layer, Schema } from "effect";
 
 import packageJson from "../package.json" with { type: "json" };
-import { AUTHORING_GUIDE_ID, DocsError, ScreenDoc, ScreenDocs } from "./docs.js";
+import {
+  AUTHORING_GUIDE_ID,
+  DocsError,
+  ScreenDoc,
+  ScreenDocs,
+} from "./docs.js";
 import { Terminus } from "./terminus/client.js";
 import {
   Assignment,
@@ -111,7 +116,8 @@ export const GetScreenImage = Action.make("get_screen_image", {
 });
 
 export const ListPlaylists = Action.make("list_playlists", {
-  description: "List Terminus playlists and their complete ordered screen membership.",
+  description:
+    "List Terminus playlists and their complete ordered screen membership.",
   success: { playlists: Schema.Array(Playlist) },
   error: TerminusError,
   readOnly: true,
@@ -191,7 +197,11 @@ export const AssignPlaylist = Action.make("assign_playlist", {
   error: TerminusError,
   readOnly: false,
   caller: Action.Anyone,
-  mcp: { title: "Assign playlist", destructiveHint: false, idempotentHint: true },
+  mcp: {
+    title: "Assign playlist",
+    destructiveHint: false,
+    idempotentHint: true,
+  },
 });
 
 export const ListExtensions = Action.make("list_extensions", {
@@ -255,40 +265,49 @@ export const DeleteExtension = Action.make("delete_extension", {
   mcp: { title: "Delete extension", idempotentHint: true },
 });
 
-export const CreateExtensionExchange = Action.make("create_extension_exchange", {
-  description:
-    "Add an exchange to a Terminus extension: URLs Terminus fetches now, and on every " +
-    "build of a poll extension. The fetched data and errors appear in get_extension a " +
-    "few seconds later.",
-  input: ExchangeInput,
-  success: { exchange: Exchange },
-  error: TerminusError,
-  readOnly: false,
-  caller: Action.Anyone,
-  mcp: { title: "Create extension exchange", destructiveHint: false },
-});
+export const CreateExtensionExchange = Action.make(
+  "create_extension_exchange",
+  {
+    description:
+      "Add an exchange to a Terminus extension: URLs Terminus fetches now, and on every " +
+      "build of a poll extension. The fetched data and errors appear in get_extension a " +
+      "few seconds later.",
+    input: ExchangeInput,
+    success: { exchange: Exchange },
+    error: TerminusError,
+    readOnly: false,
+    caller: Action.Anyone,
+    mcp: { title: "Create extension exchange", destructiveHint: false },
+  }
+);
 
-export const UpdateExtensionExchange = Action.make("update_extension_exchange", {
-  description:
-    "Change an extension exchange's given fields; omitted fields are kept, but headers, " +
-    "when given, replace all of them. Terminus fetches it again.",
-  input: ExchangeUpdate,
-  success: { exchange: Exchange },
-  error: TerminusError,
-  readOnly: false,
-  caller: Action.Anyone,
-  mcp: { title: "Update extension exchange" },
-});
+export const UpdateExtensionExchange = Action.make(
+  "update_extension_exchange",
+  {
+    description:
+      "Change an extension exchange's given fields; omitted fields are kept, but headers, " +
+      "when given, replace all of them. Terminus fetches it again.",
+    input: ExchangeUpdate,
+    success: { exchange: Exchange },
+    error: TerminusError,
+    readOnly: false,
+    caller: Action.Anyone,
+    mcp: { title: "Update extension exchange" },
+  }
+);
 
-export const DeleteExtensionExchange = Action.make("delete_extension_exchange", {
-  description: "Delete an extension exchange. This cannot be undone.",
-  input: ExchangeRef,
-  success: { exchange: Exchange },
-  error: TerminusError,
-  readOnly: false,
-  caller: Action.Anyone,
-  mcp: { title: "Delete extension exchange", idempotentHint: true },
-});
+export const DeleteExtensionExchange = Action.make(
+  "delete_extension_exchange",
+  {
+    description: "Delete an extension exchange. This cannot be undone.",
+    input: ExchangeRef,
+    success: { exchange: Exchange },
+    error: TerminusError,
+    readOnly: false,
+    caller: Action.Anyone,
+    mcp: { title: "Delete extension exchange", idempotentHint: true },
+  }
+);
 
 export const Actions = [
   GetDisplayContext,
@@ -325,14 +344,14 @@ export const actions = Action.implement(
       read_screen_doc: docs.read,
       list_screens: terminus.listScreens,
       get_screen_image: terminus.getScreenImage,
-      list_playlists: terminus.listPlaylists,
+      list_playlists: () => terminus.listPlaylists,
       create_screen: terminus.createScreen,
       update_screen: terminus.updateScreen,
       delete_screen: terminus.deleteScreen,
       save_playlist: terminus.savePlaylist,
       delete_playlist: terminus.deletePlaylist,
       assign_playlist: terminus.assignPlaylist,
-      list_extensions: terminus.listExtensions,
+      list_extensions: () => terminus.listExtensions,
       get_extension: terminus.getExtension,
       create_extension: terminus.createExtension,
       update_extension: terminus.updateExtension,
@@ -341,5 +360,5 @@ export const actions = Action.implement(
       update_extension_exchange: terminus.updateExchange,
       delete_extension_exchange: terminus.deleteExchange,
     };
-  }),
+  })
 );

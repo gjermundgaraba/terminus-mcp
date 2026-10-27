@@ -3,10 +3,11 @@
 FROM node:26.12.1-trixie-slim@sha256:36793bcbb160a6a16cede1e62b93f84e26b78a972a8a4c0b879c1c12f22761ec AS build
 WORKDIR /app
 
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml vite.config.ts tsconfig.json ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml vite.config.ts oxlint.config.ts oxfmt.config.ts tsconfig.json ./
 RUN npm install --global "pnpm@$(node -p "require('./package.json').devEngines.packageManager.version")" \
     && pnpm config set store-dir /pnpm/store
-RUN --mount=type=cache,target=/pnpm/store VP_GIT_HOOKS=0 pnpm install --frozen-lockfile
+# Skip repository git hooks and the linter patch: the image never lints.
+RUN --mount=type=cache,target=/pnpm/store pnpm install --frozen-lockfile --ignore-scripts
 COPY src ./src
 COPY docs ./docs
 RUN pnpm build && pnpm prune --prod --ignore-scripts

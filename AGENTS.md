@@ -33,3 +33,9 @@ release. Add a tool name to select part of the graph. For example, run
 # Effect
 
 Before writing or reviewing Effect code, read `node_modules/effect/AGENTS.md` in the package you are changing and the examples it links under `ai-docs/`. They ship with the installed `effect`, so they match the APIs the code compiles against. For exact signatures, read that package's installed source and types in `node_modules/effect` and `node_modules/@effect/*`. Do not write Effect APIs from memory or from examples for another version.
+
+# Linting and formatting
+
+`vp check` formats, lints and type-checks; `vp check --fix` applies the fixes. Oxlint runs Ultracite's core, anti-slop and Vitest presets and `@effect/tsgo`'s recommended Effect diagnostics, configured in `oxlint.config.ts`; Oxfmt uses Ultracite's formatter preset from `oxfmt.config.ts`. `vp install` patches Oxlint for the Effect diagnostics through the `prepare` script.
+
+Every departure from the presets lives in `oxlint.config.ts`, with its reason beside it. The shared exception block there is identical in every Effect/Vite+ repository, so change it only with the maintainer, and every copy with it. Adding any other exception also needs the maintainer's approval. Fix a lint finding in the code; there are no inline `oxlint-disable` suppressions.

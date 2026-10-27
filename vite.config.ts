@@ -1,6 +1,11 @@
 import { defineConfig } from "vite-plus";
 
+import fmt from "./oxfmt.config.js";
+import lint from "./oxlint.config.js";
+
 export default defineConfig({
+  fmt,
+  lint,
   pack: {
     deps: {
       // Resolve subpaths of dependencies without an `exports` map, so the output loads in Node unbundled.
@@ -9,16 +14,10 @@ export default defineConfig({
     entry: ["src/index.ts", "src/http.ts"],
     platform: "node",
   },
-  test: {
-    globalSetup: ["tests/build.ts"],
-  },
   staged: {
     "*": "vp check --fix",
   },
-  fmt: {},
-  lint: {
-    jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
-    rules: { "vite-plus/prefer-vite-plus-imports": "error" },
-    options: { typeAware: true, typeCheck: true },
+  test: {
+    globalSetup: ["tests/build.ts"],
   },
 });

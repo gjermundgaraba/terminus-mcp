@@ -28,7 +28,7 @@
     "check": "vp check",
     "dev": "vpx src/index.ts",
     "dev:http": "vpx src/http.ts",
-    "prepare": "vp config",
+    "prepare": "vp config && effect-tsgo patch --no-typescript --oxlint",
     "prepublishOnly": "vp pack",
     "ready": "vp check && vp test && vp pack",
     "start": "node dist/index.mjs",
@@ -43,9 +43,13 @@
     "effect": "catalog:"
   },
   "devDependencies": {
+    "@effect/tsgo": "catalog:",
     "@effect/vitest": "catalog:",
     "@types/node": "^26.0.0",
+    "oxfmt": "catalog:",
+    "oxlint": "catalog:",
     "typescript": "7.0.2",
+    "ultracite": "catalog:",
     "vite": "catalog:",
     "vite-plus": "catalog:",
     "vitest": "catalog:"

@@ -1,41 +1,26 @@
 # terminus-mcp
 
-An MCP server for agents that create and publish content to a
-[Terminus](https://github.com/usetrmnl/terminus) instance.
+An MCP server for agents that create and publish content to a [Terminus](https://github.com/usetrmnl/terminus) instance.
 
-The tools are [effect-actions](https://github.com/gjermundgaraba/effect-actions)
-actions on [Effect](https://effect.website) v4, served over stdio or Streamable
-HTTP. It needs Node.js 26.12 or newer.
+The tools are [effect-actions](https://github.com/gjermundgaraba/effect-actions) actions on [Effect](https://effect.website) v4, served over stdio or Streamable HTTP. It needs Node.js 26.12 or newer.
 
 ## Status
 
-The curated publishing API is implemented and verified against Terminus
-`0.78.0`. See [docs/design.md](docs/design.md) for the API boundary and security
-model.
+The curated publishing API is implemented and verified against Terminus `0.78.0`. See [docs/design.md](docs/design.md) for the API boundary and security model.
 
 The server exposes these tools:
 
-- `get_display_context`, `list_screens`, `get_screen_image`, and
-  `list_playlists` for Terminus discovery;
-- `search_screen_docs` and `read_screen_doc` for agent-readable authoring and
-  TRMNL Framework documentation;
+- `get_display_context`, `list_screens`, `get_screen_image`, and `list_playlists` for Terminus discovery;
+- `search_screen_docs` and `read_screen_doc` for agent-readable authoring and TRMNL Framework documentation;
 - `create_screen` and `update_screen` for complete HTML/CSS screens;
 - `save_playlist` for complete ordered playlist replacement;
 - `assign_playlist` for the single allowed device mutation;
-- `list_extensions`, `get_extension`, `create_extension`, `update_extension`,
-  `create_extension_exchange`, and `update_extension_exchange` for extensions,
-  which Terminus rebuilds into screens on a schedule from fetched or supplied
-  data;
-- `delete_screen`, `delete_playlist`, `delete_extension`, and
-  `delete_extension_exchange`, which cannot be undone.
+- `list_extensions`, `get_extension`, `create_extension`, `update_extension`, `create_extension_exchange`, and `update_extension_exchange` for extensions, which Terminus rebuilds into screens on a schedule from fetched or supplied data;
+- `delete_screen`, `delete_playlist`, `delete_extension`, and `delete_extension_exchange`, which cannot be undone.
 
-It deliberately does not expose authentication, firmware endpoints, model
-mutation, device deletion, raw device credentials, exchange header values, or a
-generic API proxy.
+It deliberately does not expose authentication, firmware endpoints, model mutation, device deletion, raw device credentials, exchange header values, or a generic API proxy.
 
-Extension exchanges make the Terminus server fetch URLs an agent chooses, so
-run Terminus with its outbound network restricted; see
-[docs/design.md](docs/design.md#extension-exchanges).
+Extension exchanges make the Terminus server fetch URLs an agent chooses, so run Terminus with its outbound network restricted; see [docs/design.md](docs/design.md#extension-exchanges).
 
 ## Installation
 
@@ -66,8 +51,7 @@ docker run --rm -p 127.0.0.1:8002:8002 \
   ghcr.io/gjermundgaraba/terminus-mcp:latest
 ```
 
-See [Configuration](#configuration) for the environment variables, the note on
-credential handling, and the network the HTTP endpoint needs.
+See [Configuration](#configuration) for the environment variables, the note on credential handling, and the network the HTTP endpoint needs.
 
 ## Development
 
@@ -77,7 +61,9 @@ Development uses [Vite+](https://viteplus.dev) (`npm install -g vite-plus`):
 git clone https://github.com/gjermundgaraba/terminus-mcp.git
 cd terminus-mcp
 vp install
-vp run ready
+vp check        # format, lint, and type-check
+vp check --fix  # apply formatting and lint fixes
+vp run ready    # check, test, build
 ```
 
 Run the development server over stdio:
@@ -117,32 +103,15 @@ The HTTP entrypoint additionally accepts:
 
 - `MCP_HOST`: Listen address; defaults to `127.0.0.1`.
 - `MCP_PORT`: Listen port from 1 to 65535; defaults to `8002`.
-- `MCP_ALLOWED_ORIGINS`: Optional comma-separated exact origins, such as
-  `https://ui.example.com`, a browser may call `/mcp` from. A request carrying
-  any other `Origin` is refused with 403; one without `Origin`, as MCP clients
-  outside a browser send, is served. An entry that is not an exact origin, such
-  as one with a trailing slash or a path, stops the server at startup.
+- `MCP_ALLOWED_ORIGINS`: Optional comma-separated exact origins, such as `https://ui.example.com`, a browser may call `/mcp` from. A request carrying any other `Origin` is refused with 403; one without `Origin`, as MCP clients outside a browser send, is served. An entry that is not an exact origin, such as one with a trailing slash or a path, stops the server at startup.
 
-Credentials will never be accepted as MCP tool arguments, returned in tool
-results, or intentionally written to logs. Inject them with the MCP host's
-secret-management facility instead of committing them to its configuration.
+Credentials will never be accepted as MCP tool arguments, returned in tool results, or intentionally written to logs. Inject them with the MCP host's secret-management facility instead of committing them to its configuration.
 
-For remote MCP clients, use `http://<host>:8002/mcp`. It speaks MCP
-`2026-07-28`, `2025-11-25` and `2025-06-18`, as the stdio server does. A client
-on a 2025 revision opens a session, which lasts until the client ends it or the
-server stops. The tools never change after startup: a `2026-07-28` client
-cannot subscribe to them, and a 2025 session, though told they may change,
-never hears that they have. `/healthz` provides a container health check. The
-HTTP endpoint has no application-level authentication, so whoever reaches it can
-call every tool and open sessions: it must remain on an access-controlled
-internal network.
+For remote MCP clients, use `http://<host>:8002/mcp`. It speaks MCP `2026-07-28`, `2025-11-25` and `2025-06-18`, as the stdio server does. A client on a 2025 revision opens a session, which lasts until the client ends it or the server stops. The tools never change after startup: a `2026-07-28` client cannot subscribe to them, and a 2025 session, though told they may change, never hears that they have. `/healthz` provides a container health check. The HTTP endpoint has no application-level authentication, so whoever reaches it can call every tool and open sessions: it must remain on an access-controlled internal network.
 
 ## Verification
 
-`vp run ready` runs formatting, linting, strict type checks, the tests, and a
-production build. The tests call the tools through an in-memory MCP client
-against a fake Terminus, and build the server to call it over stdio as an MCP
-host would.
+`vp run ready` runs formatting, linting, strict type checks, the tests, and a production build. Linting and formatting use [Ultracite](https://www.ultracite.ai)'s presets with `@effect/tsgo`'s Effect diagnostics, configured in `oxlint.config.ts` and `oxfmt.config.ts`. Each rule the project relaxes is in `oxlint.config.ts`, with its reason. The tests call the tools through an in-memory MCP client against a fake Terminus, and build the server to call it over stdio as an MCP host would.
 
 To verify against a configured Terminus instance:
 
@@ -150,13 +119,7 @@ To verify against a configured Terminus instance:
 vp run verify:live
 ```
 
-The live check calls every action in process against the Terminus in
-`TERMINUS_URL`, `TERMINUS_LOGIN` and `TERMINUS_PASSWORD`. It creates a
-temporary screen, playlist, and unscheduled extension, with an exchange that
-fetches the Terminus health check, and assigns the device's existing playlist
-back to itself. It deletes the temporary objects with the delete tools, or
-directly if the run fails first. Set `TERMINUS_DEVICE_ID` when Terminus has more
-than one device.
+The live check calls every action in process against the Terminus in `TERMINUS_URL`, `TERMINUS_LOGIN` and `TERMINUS_PASSWORD`. It creates a temporary screen, playlist, and unscheduled extension, with an exchange that fetches the Terminus health check, and assigns the device's existing playlist back to itself. It deletes the temporary objects with the delete tools, or directly if the run fails first. Set `TERMINUS_DEVICE_ID` when Terminus has more than one device.
 
 ## License
 

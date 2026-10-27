@@ -1,7 +1,8 @@
 import { assert } from "@effect/vitest";
-import * as Testing from "@gjermundgaraba/effect-actions/Testing";
 import * as ActionMcp from "@gjermundgaraba/effect-actions/ActionMcp";
+import * as Testing from "@gjermundgaraba/effect-actions/Testing";
 import { ConfigProvider, Effect, Layer } from "effect";
+import type { Schema } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/http";
 
 import { routes } from "../src/http.js";
@@ -30,10 +31,10 @@ export const fakeHttp = (respond: (request: Sent) => Response) =>
               request.body._tag === "Uint8Array"
                 ? JSON.parse(new TextDecoder().decode(request.body.body))
                 : undefined,
-          }),
-        ),
-      ),
-    ),
+          })
+        )
+      )
+    )
   );
 
 export const terminusEnvironment = {
@@ -44,78 +45,9 @@ export const terminusEnvironment = {
 
 /** Configuration from `environment` beside the Terminus account's. */
 export const configured = (environment: Record<string, string> = {}) =>
-  ConfigProvider.layer(ConfigProvider.fromEnvRecord({ ...terminusEnvironment, ...environment }));
-
-/** The server's services over one fake HttpClient: Terminus at its origin, TRMNL at theirs. */
-export const fakeServices = (respond: (request: Sent) => Response) =>
-  Layer.provide(
-    services,
-    fakeHttp((request) => trmnlDocs(request) ?? respond(request)),
+  ConfigProvider.layer(
+    ConfigProvider.fromEnvRecord({ ...terminusEnvironment, ...environment })
   );
-
-/** The HTTP routes in memory over `respond`, configured with `environment`. */
-export const serve = (
-  respond: (request: Sent) => Response,
-  environment: Record<string, string> = {},
-) =>
-  Testing.layer(routes).pipe(
-    Layer.provide(fakeServices(respond)),
-    Layer.provide(configured(environment)),
-  );
-
-/** One MCP request to the served routes, with `headers`, answered with the response as sent. */
-export const send = (
-  method: string,
-  params?: ActionMcp.Params,
-  headers: Record<string, string> = {},
-) => HttpClient.execute(ActionMcp.request(method, params, { headers }));
-
-export const json = (body: unknown, status = 200) => Response.json(body, { status });
-
-export const png = new Uint8Array([137, 80, 78, 71]);
-
-/**
- * A Terminus holding `device`, `model`, `screen` and `playlist`, which `routes` may extend or
- * override. Every API request must carry the token its one login issued.
- */
-export const terminus =
-  (routes: (request: Sent) => Response | undefined = () => undefined) =>
-  (request: Sent): Response => {
-    const { method, url, authorization, body } = request;
-    if (url.pathname === "/login") {
-      assert.deepStrictEqual(body, { login: "agent@example.test", password: "secret" });
-      return json({ access_token: "access", refresh_token: "refresh" });
-    }
-    if (url.pathname === "/uploads/screen.png") {
-      assert.strictEqual(authorization, undefined);
-      return new Response(png, { headers: { "Content-Type": "image/png" } });
-    }
-
-    assert.strictEqual(authorization, "access");
-    const answer = routes(request);
-    if (answer) return answer;
-    if (method === "GET") {
-      switch (url.pathname) {
-        case "/api/devices":
-          return json({ data: [device] });
-        case "/api/models":
-          return json({ data: [model] });
-        case "/api/screens":
-          return json({ data: [screen] });
-        case `/api/screens/${screen.id}`:
-          return json({ data: screen });
-        case "/api/playlists":
-          return json({ data: [playlist] });
-        case "/api/extensions":
-          return json({ data: [extension] });
-        case `/api/extensions/${extension.id}`:
-          return json({ data: extension });
-        case `/api/extensions/${extension.id}/exchanges`:
-          return json({ data: [exchange] });
-      }
-    }
-    return assert.fail(`Unexpected Terminus request: ${method} ${url.href}`);
-  };
 
 const text = (body: string, contentType: string) =>
   new Response(body, { headers: { "Content-Type": contentType } });
@@ -123,37 +55,84 @@ const text = (body: string, contentType: string) =>
 /** How often each TRMNL documentation URL was fetched, in this test file. */
 export const docsFetches = new Map<string, number>();
 
-/** TRMNL's documentation pages, or undefined for a request to another host. */
-export function trmnlDocs({ url }: Sent): Response | undefined {
-  if (url.hostname !== "trmnl.com" && url.hostname !== "docs.trmnl.com") return undefined;
+/** TRMNL's documentation pages, or null for a request to another host. */
+export const trmnlDocs = ({ url }: Sent): Response | null => {
+  if (url.hostname !== "trmnl.com" && url.hostname !== "docs.trmnl.com") {
+    return null;
+  }
+
   docsFetches.set(url.href, (docsFetches.get(url.href) ?? 0) + 1);
 
   switch (url.href) {
-    case "https://trmnl.com/framework":
+    case "https://trmnl.com/framework": {
       return text(
         '<a href="/framework/docs/3.0">3.0</a><a href="/framework/docs/3.1">3.1</a>',
-        "text/html",
+        "text/html"
       );
-    case "https://docs.trmnl.com/go/llms.txt":
+    }
+
+    case "https://docs.trmnl.com/go/llms.txt": {
       return text(
         "- [Screen Templating](https://docs.trmnl.com/go/private-plugins/templates.md): Build screens.",
-        "text/markdown",
+        "text/markdown"
       );
-    case "https://trmnl.com/framework/docs/3.1":
+    }
+
+    case "https://trmnl.com/framework/docs/3.1": {
       return text(
         '<a href="/framework/docs/3.1/structure">Structure</a>' +
           '<a href="/framework/docs/3.1/screen">Screen</a>' +
           '<a href="/framework/docs/3.1/layout">Layout</a>' +
           '<a href="/framework/docs/3.1/framework_runtime">Runtime</a>',
-        "text/html",
+        "text/html"
       );
-    case "https://trmnl.com/framework/examples":
-      return text('<a href="/framework/examples/weather">Weather</a>', "text/html");
-    case "https://trmnl.com/framework/docs/3.1/structure.md":
+    }
+
+    case "https://trmnl.com/framework/examples": {
+      return text(
+        '<a href="/framework/examples/weather">Weather</a>',
+        "text/html"
+      );
+    }
+
+    case "https://trmnl.com/framework/docs/3.1/structure.md": {
       return text("# Structure", "text/markdown");
+    }
+
+    default: {
+      return assert.fail(`Unexpected documentation request to ${url.href}`);
+    }
   }
-  return assert.fail(`Unexpected documentation request to ${url.href}`);
-}
+};
+
+/** The server's services over one fake HttpClient: Terminus at its origin, TRMNL at theirs. */
+export const fakeServices = (respond: (request: Sent) => Response) =>
+  Layer.provide(
+    services,
+    fakeHttp((request) => trmnlDocs(request) ?? respond(request))
+  );
+
+/** The HTTP routes in memory over `respond`, configured with `environment`. */
+export const serve = (
+  respond: (request: Sent) => Response,
+  environment: Record<string, string> = {}
+) =>
+  Testing.layer(routes).pipe(
+    Layer.provide(fakeServices(respond)),
+    Layer.provide(configured(environment))
+  );
+
+/** One MCP request to the served routes, with `headers`, answered with the response as sent. */
+export const send = (
+  method: string,
+  params?: ActionMcp.Params,
+  headers: Record<string, string> = {}
+) => HttpClient.execute(ActionMcp.request(method, params, { headers }));
+
+export const json = (body: Schema.Json, status = 200) =>
+  Response.json(body, { status });
+
+export const png = new Uint8Array([137, 80, 78, 71]);
 
 export const model = {
   id: 1,
@@ -251,7 +230,8 @@ export const extension = {
   tags: [],
   static_body: { games: ["Chrono Trigger"] },
   fields: null,
-  template: '<div class="{{ extension.css_classes }}">{{ source_1.games[0] }}</div>',
+  template:
+    '<div class="{{ extension.css_classes }}">{{ source_1.games[0] }}</div>',
   data: null,
   interval: 15,
   unit: "minute",
@@ -276,3 +256,77 @@ export const exchange = {
   created_at: "2026-10-08T06:28:09+00:00",
   updated_at: "2026-10-08T06:28:09+00:00",
 };
+
+/**
+ * A Terminus holding `device`, `model`, `screen` and `playlist`, which `overrides` may extend
+ * or replace. Every API request must carry the token its one login issued.
+ */
+export const terminus =
+  (overrides: (request: Sent) => Response | null = () => null) =>
+  (request: Sent): Response => {
+    const { method, url, authorization, body } = request;
+
+    if (url.pathname === "/login") {
+      assert.deepStrictEqual(body, {
+        login: "agent@example.test",
+        password: "secret",
+      });
+
+      return json({ access_token: "access", refresh_token: "refresh" });
+    }
+
+    if (url.pathname === "/uploads/screen.png") {
+      assert.strictEqual(authorization, undefined);
+
+      return new Response(png, { headers: { "Content-Type": "image/png" } });
+    }
+
+    assert.strictEqual(authorization, "access");
+    const answer = overrides(request);
+
+    if (answer) {
+      return answer;
+    }
+
+    if (method === "GET") {
+      switch (url.pathname) {
+        case "/api/devices": {
+          return json({ data: [device] });
+        }
+
+        case "/api/models": {
+          return json({ data: [model] });
+        }
+
+        case "/api/screens": {
+          return json({ data: [screen] });
+        }
+
+        case `/api/screens/${screen.id}`: {
+          return json({ data: screen });
+        }
+
+        case "/api/playlists": {
+          return json({ data: [playlist] });
+        }
+
+        case "/api/extensions": {
+          return json({ data: [extension] });
+        }
+
+        case `/api/extensions/${extension.id}`: {
+          return json({ data: extension });
+        }
+
+        case `/api/extensions/${extension.id}/exchanges`: {
+          return json({ data: [exchange] });
+        }
+
+        default: {
+          break;
+        }
+      }
+    }
+
+    return assert.fail(`Unexpected Terminus request: ${method} ${url.href}`);
+  };

@@ -1,8 +1,11 @@
-import { Effect, Option, Schema, SchemaTransformation, Struct } from "effect";
+import { Effect, Schema, SchemaTransformation, Struct } from "effect";
 
 import { AUTHORING_GUIDE_ID } from "../docs.js";
 
-export class TerminusError extends Schema.TaggedError<TerminusError>()("TerminusError", {
+export class TerminusError extends Schema.TaggedError<
+  TerminusError,
+  { readonly brand: unique symbol }
+>()("TerminusError", {
   message: Schema.String,
 }) {}
 
@@ -15,7 +18,9 @@ const NullableNumber = Schema.NullOr(Schema.Finite);
 const ModelCss = Schema.Struct({
   classes: Schema.Record(Schema.String, Schema.String),
   variables: Schema.Array(Schema.Tuple([Schema.String, Schema.String])),
-}).pipe(Schema.catchDecoding(() => Effect.succeed(Option.some({ classes: {}, variables: [] }))));
+}).pipe(
+  Schema.catchDecoding(() => Effect.succeedSome({ classes: {}, variables: [] }))
+);
 
 export const SafeDevice = Schema.Struct({
   id: PositiveInt,
@@ -85,8 +90,8 @@ const Missing = MissingAnswer.pipe(
     SchemaTransformation.transform<null, typeof MissingAnswer.Type>({
       decode: () => null,
       encode: () => ({ status: 404 }),
-    }),
-  ),
+    })
+  )
 );
 
 const PlaylistItem = Schema.Struct({
@@ -196,23 +201,36 @@ const shortText = [Schema.isMinLength(1), Schema.isMaxLength(255)] as const;
 
 /** Trimmed, and bounded on both sides, so the tool's input schema lists the bounds too. */
 export const ShortText = Schema.String.check(...shortText).pipe(
-  Schema.decodeTo(Schema.Trimmed.check(...shortText), SchemaTransformation.trim()),
+  Schema.decodeTo(
+    Schema.Trimmed.check(...shortText),
+    SchemaTransformation.trim()
+  )
 );
-const LongText = Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(1_000_000));
+
+const LongText = Schema.String.check(
+  Schema.isMinLength(1),
+  Schema.isMaxLength(1_000_000)
+);
+
 const Mode = Schema.optionalKey(
   Schema.Literals(["text", "dither"]).annotate({
     description:
       "Use dither for photos or image-heavy content; text, the default, for text and UI.",
-  }),
+  })
 );
 
-export const DisplayQuery = Schema.Struct({ device_id: Schema.optionalKey(PositiveInt) });
+export const DisplayQuery = Schema.Struct({
+  device_id: Schema.optionalKey(PositiveInt),
+});
 
 export const ScreenRef = Schema.Struct({ screen_id: PositiveInt });
 
 export const PlaylistRef = Schema.Struct({ playlist_id: PositiveInt });
 
-export const Assignment = Schema.Struct({ device_id: PositiveInt, playlist_id: PositiveInt });
+export const Assignment = Schema.Struct({
+  device_id: PositiveInt,
+  playlist_id: PositiveInt,
+});
 
 export const ScreenFilters = Schema.Struct({
   model_id: Schema.optionalKey(PositiveInt),
@@ -240,22 +258,36 @@ export const PlaylistInput = Schema.Struct({
   name: ShortText,
   label: ShortText,
   mode: Schema.optionalKey(PlaylistMode),
-  screen_ids: Schema.Array(PositiveInt).check(Schema.isMaxLength(1_000)),
+  screen_ids: Schema.Array(PositiveInt).check(Schema.isMaxLength(1000)),
 });
 
-const ExtensionKind = Schema.Literals(["image", "poll", "static", "webhook"]).annotate({
+const ExtensionKind = Schema.Literals([
+  "image",
+  "poll",
+  "static",
+  "webhook",
+]).annotate({
   description:
     "static renders static_body as source_1; poll renders the data its exchanges fetch; " +
     "image renders its exchanges' URLs as images; webhook renders data, which " +
     "update_extension replaces.",
 });
-const Unit = Schema.Literals(["none", "minute", "hour", "day", "week", "month"]).annotate({
+
+const Unit = Schema.Literals([
+  "none",
+  "minute",
+  "hour",
+  "day",
+  "week",
+  "month",
+]).annotate({
   description:
     "How often Terminus rebuilds the extension's screens; none never builds them. The " +
     "interval must be 0-59 for minutes, 0-23 for hours, 1-31 for days, 0-6 for weeks, " +
     "and 1-12 for months. Weeks build on the given days; months may build on their last " +
     "day instead.",
 });
+
 const Weekday = Schema.Literals([
   "sunday",
   "monday",
@@ -269,7 +301,9 @@ const Weekday = Schema.Literals([
 const extensionFields = {
   name: ShortText,
   label: ShortText,
-  description: Schema.optionalKey(Schema.NullOr(Schema.String.check(Schema.isMaxLength(10_000)))),
+  description: Schema.optionalKey(
+    Schema.NullOr(Schema.String.check(Schema.isMaxLength(10_000)))
+  ),
   kind: ExtensionKind,
   mode: Mode,
   template: LongText.annotate({
@@ -277,22 +311,30 @@ const extensionFields = {
       "A Liquid template for the body of the screen, not a complete HTML document. Read " +
       `${AUTHORING_GUIDE_ID} first.`,
   }),
-  tags: Schema.optionalKey(Schema.Array(ShortText).check(Schema.isMaxLength(100))),
+  tags: Schema.optionalKey(
+    Schema.Array(ShortText).check(Schema.isMaxLength(100))
+  ),
   static_body: Schema.optionalKey(Schema.NullOr(Schema.JsonObject)),
-  fields: Schema.optionalKey(Schema.Array(Schema.JsonObject).check(Schema.isMaxLength(100))),
+  fields: Schema.optionalKey(
+    Schema.Array(Schema.JsonObject).check(Schema.isMaxLength(100))
+  ),
   data: Schema.optionalKey(Schema.NullOr(Schema.JsonObject)),
   interval: Schema.optionalKey(NonNegativeInt),
   unit: Schema.optionalKey(Unit),
   days: Schema.optionalKey(Schema.Array(Weekday).check(Schema.isMaxLength(7))),
   last_day_of_month: Schema.optionalKey(Schema.Boolean),
   start_at: Schema.optionalKey(
-    ShortText.annotate({ description: "When the schedule starts, as an ISO 8601 date-time." }),
+    ShortText.annotate({
+      description: "When the schedule starts, as an ISO 8601 date-time.",
+    })
   ),
-  model_ids: Schema.optionalKey(Schema.Array(PositiveInt).check(Schema.isMaxLength(100))),
+  model_ids: Schema.optionalKey(
+    Schema.Array(PositiveInt).check(Schema.isMaxLength(100))
+  ),
   device_ids: Schema.optionalKey(
-    Schema.Array(PositiveInt)
-      .check(Schema.isMaxLength(100))
-      .annotate({ description: "Build one screen per device instead of one per model." }),
+    Schema.Array(PositiveInt).check(Schema.isMaxLength(100)).annotate({
+      description: "Build one screen per device instead of one per model.",
+    })
   ),
 };
 
@@ -303,7 +345,11 @@ export const ExtensionRef = Schema.Struct({ extension_id: PositiveInt });
 /** Any of an extension's fields; the ones creating it requires are optional. */
 export const ExtensionUpdate = Schema.Struct({
   ...ExtensionRef.fields,
-  ...Struct.mapPick(extensionFields, ["name", "label", "kind", "template"], Schema.optionalKey),
+  ...Struct.mapPick(
+    extensionFields,
+    ["name", "label", "kind", "template"],
+    Schema.optionalKey
+  ),
 });
 
 const exchangeInputFields = {
@@ -316,7 +362,7 @@ const exchangeInputFields = {
   headers: Schema.optionalKey(
     Schema.NullOr(Schema.Record(Schema.String, Schema.String)).annotate({
       description: "All request headers; their values are never returned.",
-    }),
+    })
   ),
   body: Schema.optionalKey(Schema.NullOr(Schema.JsonObject)),
 };
@@ -326,7 +372,10 @@ export const ExchangeInput = Schema.Struct({
   ...exchangeInputFields,
 });
 
-export const ExchangeRef = Schema.Struct({ extension_id: PositiveInt, exchange_id: PositiveInt });
+export const ExchangeRef = Schema.Struct({
+  extension_id: PositiveInt,
+  exchange_id: PositiveInt,
+});
 
 /** Any of an exchange's fields. */
 export const ExchangeUpdate = Schema.Struct({
@@ -336,26 +385,48 @@ export const ExchangeUpdate = Schema.Struct({
 
 export const ListOf = <S extends Schema.Top>(item: S) =>
   Schema.Struct({ data: Schema.Array(item) });
-export const OneOf = <S extends Schema.Top>(item: S) => Schema.Struct({ data: item });
+
+export const OneOf = <S extends Schema.Top>(item: S) =>
+  Schema.Struct({ data: item });
+
 /** One `item`, or null if Terminus says it is missing. */
-export const OneOrMissing = <S extends Schema.Top>(item: S) => Schema.Union([OneOf(item), Missing]);
+export const OneOrMissing = <S extends Schema.Top>(item: S) =>
+  Schema.Union([OneOf(item), Missing]);
 
 export type Model = typeof Model.Type;
+
 export type Playlist = typeof Playlist.Type;
+
 export type SafeDevice = typeof SafeDevice.Type;
+
 export type FrameworkContext = typeof FrameworkContext.Type;
+
 export type DisplayQuery = typeof DisplayQuery.Type;
+
 export type ScreenRef = typeof ScreenRef.Type;
+
 export type PlaylistRef = typeof PlaylistRef.Type;
+
 export type Assignment = typeof Assignment.Type;
+
 export type ScreenFilters = typeof ScreenFilters.Type;
+
 export type ScreenInput = typeof ScreenInput.Type;
+
 export type ScreenUpdate = typeof ScreenUpdate.Type;
+
 export type PlaylistInput = typeof PlaylistInput.Type;
+
 export type Extension = typeof Extension.Type;
+
 export type ExtensionInput = typeof ExtensionInput.Type;
+
 export type ExtensionUpdate = typeof ExtensionUpdate.Type;
+
 export type ExtensionRef = typeof ExtensionRef.Type;
+
 export type ExchangeInput = typeof ExchangeInput.Type;
+
 export type ExchangeUpdate = typeof ExchangeUpdate.Type;
+
 export type ExchangeRef = typeof ExchangeRef.Type;
