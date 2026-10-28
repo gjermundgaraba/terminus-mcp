@@ -43,6 +43,7 @@
     "effect": "catalog:"
   },
   "devDependencies": {
+    "@clanker-stuff/oxlint-config": "catalog:",
     "@effect/tsgo": "catalog:",
     "@effect/vitest": "catalog:",
     "@types/node": "^26.0.0",

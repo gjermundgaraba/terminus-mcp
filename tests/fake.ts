@@ -15,7 +15,6 @@ export interface Sent {
   readonly body: unknown;
 }
 
-/** An HttpClient answering every request with `respond`, as Terminus or TRMNL would. */
 export const fakeHttp = (respond: (request: Sent) => Response) =>
   Layer.succeed(
     HttpClient.HttpClient,
@@ -43,7 +42,6 @@ export const terminusEnvironment = {
   TERMINUS_PASSWORD: "secret",
 };
 
-/** Configuration from `environment` beside the Terminus account's. */
 export const configured = (environment: Record<string, string> = {}) =>
   ConfigProvider.layer(
     ConfigProvider.fromEnvRecord({ ...terminusEnvironment, ...environment })
@@ -52,13 +50,11 @@ export const configured = (environment: Record<string, string> = {}) =>
 const text = (body: string, contentType: string) =>
   new Response(body, { headers: { "Content-Type": contentType } });
 
-/** How often each TRMNL documentation URL was fetched, in this test file. */
 export const docsFetches = new Map<string, number>();
 
-/** TRMNL's documentation pages, or null for a request to another host. */
-export const trmnlDocs = ({ url }: Sent): Response | null => {
+export const trmnlDocs = ({ url }: Sent): Response | undefined => {
   if (url.hostname !== "trmnl.com" && url.hostname !== "docs.trmnl.com") {
-    return null;
+    return undefined;
   }
 
   docsFetches.set(url.href, (docsFetches.get(url.href) ?? 0) + 1);
@@ -105,14 +101,12 @@ export const trmnlDocs = ({ url }: Sent): Response | null => {
   }
 };
 
-/** The server's services over one fake HttpClient: Terminus at its origin, TRMNL at theirs. */
 export const fakeServices = (respond: (request: Sent) => Response) =>
   Layer.provide(
     services,
     fakeHttp((request) => trmnlDocs(request) ?? respond(request))
   );
 
-/** The HTTP routes in memory over `respond`, configured with `environment`. */
 export const serve = (
   respond: (request: Sent) => Response,
   environment: Record<string, string> = {}
@@ -122,7 +116,6 @@ export const serve = (
     Layer.provide(configured(environment))
   );
 
-/** One MCP request to the served routes, with `headers`, answered with the response as sent. */
 export const send = (
   method: string,
   params?: ActionMcp.Params,
@@ -257,12 +250,8 @@ export const exchange = {
   updated_at: "2026-10-08T06:28:09+00:00",
 };
 
-/**
- * A Terminus holding `device`, `model`, `screen` and `playlist`, which `overrides` may extend
- * or replace. Every API request must carry the token its one login issued.
- */
 export const terminus =
-  (overrides: (request: Sent) => Response | null = () => null) =>
+  (overrides: (request: Sent) => Response | undefined = () => undefined) =>
   (request: Sent): Response => {
     const { method, url, authorization, body } = request;
 
@@ -320,10 +309,6 @@ export const terminus =
 
         case `/api/extensions/${extension.id}/exchanges`: {
           return json({ data: [exchange] });
-        }
-
-        default: {
-          break;
         }
       }
     }

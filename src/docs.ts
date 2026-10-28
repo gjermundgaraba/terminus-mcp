@@ -5,7 +5,6 @@ import { HttpClient, HttpClientRequest } from "effect/http";
 
 import { download } from "./http-client.js";
 
-/** The ID of the authoring guide this server ships, which agents read before writing a screen. */
 export const AUTHORING_GUIDE_ID = "terminus:screen-authoring";
 
 export class DocsError extends Schema.TaggedError<
@@ -34,15 +33,19 @@ const localDoc: ScreenDoc = {
   source: "Terminus MCP",
 };
 
-/** The docs.trmnl.com pages in the catalog, and whether search lists each without a query. */
-const trmnlPages = new Map([
-  ["private-plugins/templates", true],
-  ["private-plugins/templates-advanced", true],
-  ["private-plugins/reusing-markup", false],
-  ["diy/imagemagick-guide", false],
+const trmnlOrigins = new Set(["https://trmnl.com", "https://docs.trmnl.com"]);
+
+const trmnlEntryPoints = new Set([
+  "private-plugins/templates",
+  "private-plugins/templates-advanced",
 ]);
 
-/** The Framework pages search lists without a query, in whichever version is current. */
+const trmnlPages = new Set([
+  ...trmnlEntryPoints,
+  "private-plugins/reusing-markup",
+  "diy/imagemagick-guide",
+]);
+
 const frameworkEntryPoints = new Set([
   "structure",
   "screen",
@@ -52,7 +55,6 @@ const frameworkEntryPoints = new Set([
 
 const fail = (message: string) => Effect.fail(new DocsError({ message }));
 
-/** Each match of `pattern` in `input` as its named groups; a group the pattern lacks is a defect. */
 const matches = <F extends Schema.Struct.Fields>(
   input: string,
   pattern: RegExp,
@@ -83,6 +85,10 @@ const make = Effect.gen(function* () {
     content: "html" | "markdown",
     maximumBytes: number
   ) => {
+    if (!trmnlOrigins.has(new URL(url).origin)) {
+      return fail(`Refused a documentation URL outside TRMNL: ${url}`);
+    }
+
     const types =
       content === "html" ? ["text/html"] : ["text/markdown", "text/plain"];
 
@@ -118,7 +124,6 @@ const make = Effect.gen(function* () {
       );
   };
 
-  // Every URL below is a constant, or one built from a slug of [a-z0-9_-], so it stays on TRMNL.
   const build = Effect.gen(function* () {
     const frameworkPage = yield* fetchText(
       "https://trmnl.com/framework",
@@ -204,9 +209,7 @@ const make = Effect.gen(function* () {
 
     const entryPoints = new Set([
       localDoc.id,
-      ...[...trmnlPages].flatMap(([path, listed]) =>
-        listed ? [`trmnl:${path}`] : []
-      ),
+      ...[...trmnlEntryPoints].map((path) => `trmnl:${path}`),
       ...[...frameworkEntryPoints].map(
         (slug) => `framework:${version}:${slug}`
       ),
@@ -215,7 +218,6 @@ const make = Effect.gen(function* () {
     return { all, entryPoints: all.filter(({ id }) => entryPoints.has(id)) };
   });
 
-  // An hour of searches and reads share one catalog; a failed build is retried by the next one.
   const catalog = yield* Effect.cachedWithTTL(build, (exit) =>
     Exit.isSuccess(exit) ? "1 hour" : 0
   );
@@ -271,7 +273,6 @@ const make = Effect.gen(function* () {
   return { search, read };
 });
 
-/** The authoring guide, and the official TRMNL documentation it links to. */
 export class ScreenDocs extends Context.Service<ScreenDocs>()(
   "terminus-mcp/ScreenDocs",
   { make }

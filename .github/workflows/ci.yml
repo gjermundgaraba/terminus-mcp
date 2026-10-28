@@ -32,7 +32,6 @@ jobs:
       - name: Check that the build left the tree clean
         run: git diff --exit-code
 
-  # Builds the image on every run; pushes it from main, tagged sha-<short> and latest.
   image:
     needs: check
     runs-on: ubuntu-24.04

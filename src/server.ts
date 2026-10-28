@@ -13,7 +13,7 @@ import {
   Assignment,
   DisplayContext,
   DisplayQuery,
-  Exchange,
+  RedactedExchange,
   ExchangeInput,
   ExchangeRef,
   ExchangeUpdate,
@@ -49,11 +49,7 @@ export const server = {
     `of ${AUTHORING_GUIDE_ID} before writing one. Deletion cannot be undone.`,
 };
 
-/** The Terminus account and the docs, over the HttpClient the entrypoint provides. */
 export const services = Layer.mergeAll(Terminus.layer, ScreenDocs.layer);
-
-// Hints state only what differs from MCP's defaults: a write is destructive, not idempotent,
-// and every tool reaches the open world. `readOnly` is the read-only hint.
 
 export const GetDisplayContext = Action.make("get_display_context", {
   description:
@@ -135,7 +131,11 @@ export const CreateScreen = Action.make("create_screen", {
   error: TerminusError,
   readOnly: false,
   caller: Action.Anyone,
-  mcp: { title: "Create screen", destructiveHint: false },
+  mcp: {
+    title: "Create screen",
+    destructiveHint: false,
+    idempotentHint: false,
+  },
 });
 
 export const UpdateScreen = Action.make("update_screen", {
@@ -148,7 +148,11 @@ export const UpdateScreen = Action.make("update_screen", {
   error: TerminusError,
   readOnly: false,
   caller: Action.Anyone,
-  mcp: { title: "Update screen" },
+  mcp: {
+    title: "Update screen",
+    destructiveHint: true,
+    idempotentHint: false,
+  },
 });
 
 export const DeleteScreen = Action.make("delete_screen", {
@@ -160,7 +164,11 @@ export const DeleteScreen = Action.make("delete_screen", {
   error: TerminusError,
   readOnly: false,
   caller: Action.Anyone,
-  mcp: { title: "Delete screen", idempotentHint: true },
+  mcp: {
+    title: "Delete screen",
+    destructiveHint: true,
+    idempotentHint: true,
+  },
 });
 
 export const SavePlaylist = Action.make("save_playlist", {
@@ -173,7 +181,11 @@ export const SavePlaylist = Action.make("save_playlist", {
   error: TerminusError,
   readOnly: false,
   caller: Action.Anyone,
-  mcp: { title: "Save playlist" },
+  mcp: {
+    title: "Save playlist",
+    destructiveHint: true,
+    idempotentHint: false,
+  },
 });
 
 export const DeletePlaylist = Action.make("delete_playlist", {
@@ -185,7 +197,11 @@ export const DeletePlaylist = Action.make("delete_playlist", {
   error: TerminusError,
   readOnly: false,
   caller: Action.Anyone,
-  mcp: { title: "Delete playlist", idempotentHint: true },
+  mcp: {
+    title: "Delete playlist",
+    destructiveHint: true,
+    idempotentHint: true,
+  },
 });
 
 export const AssignPlaylist = Action.make("assign_playlist", {
@@ -237,7 +253,11 @@ export const CreateExtension = Action.make("create_extension", {
   error: TerminusError,
   readOnly: false,
   caller: Action.Anyone,
-  mcp: { title: "Create extension", destructiveHint: false },
+  mcp: {
+    title: "Create extension",
+    destructiveHint: false,
+    idempotentHint: false,
+  },
 });
 
 export const UpdateExtension = Action.make("update_extension", {
@@ -250,7 +270,11 @@ export const UpdateExtension = Action.make("update_extension", {
   error: TerminusError,
   readOnly: false,
   caller: Action.Anyone,
-  mcp: { title: "Update extension" },
+  mcp: {
+    title: "Update extension",
+    destructiveHint: true,
+    idempotentHint: false,
+  },
 });
 
 export const DeleteExtension = Action.make("delete_extension", {
@@ -262,7 +286,11 @@ export const DeleteExtension = Action.make("delete_extension", {
   error: TerminusError,
   readOnly: false,
   caller: Action.Anyone,
-  mcp: { title: "Delete extension", idempotentHint: true },
+  mcp: {
+    title: "Delete extension",
+    destructiveHint: true,
+    idempotentHint: true,
+  },
 });
 
 export const CreateExtensionExchange = Action.make(
@@ -273,11 +301,15 @@ export const CreateExtensionExchange = Action.make(
       "build of a poll extension. The fetched data and errors appear in get_extension a " +
       "few seconds later.",
     input: ExchangeInput,
-    success: { exchange: Exchange },
+    success: { exchange: RedactedExchange },
     error: TerminusError,
     readOnly: false,
     caller: Action.Anyone,
-    mcp: { title: "Create extension exchange", destructiveHint: false },
+    mcp: {
+      title: "Create extension exchange",
+      destructiveHint: false,
+      idempotentHint: false,
+    },
   }
 );
 
@@ -288,11 +320,15 @@ export const UpdateExtensionExchange = Action.make(
       "Change an extension exchange's given fields; omitted fields are kept, but headers, " +
       "when given, replace all of them. Terminus fetches it again.",
     input: ExchangeUpdate,
-    success: { exchange: Exchange },
+    success: { exchange: RedactedExchange },
     error: TerminusError,
     readOnly: false,
     caller: Action.Anyone,
-    mcp: { title: "Update extension exchange" },
+    mcp: {
+      title: "Update extension exchange",
+      destructiveHint: true,
+      idempotentHint: false,
+    },
   }
 );
 
@@ -301,11 +337,15 @@ export const DeleteExtensionExchange = Action.make(
   {
     description: "Delete an extension exchange. This cannot be undone.",
     input: ExchangeRef,
-    success: { exchange: Exchange },
+    success: { exchange: RedactedExchange },
     error: TerminusError,
     readOnly: false,
     caller: Action.Anyone,
-    mcp: { title: "Delete extension exchange", idempotentHint: true },
+    mcp: {
+      title: "Delete extension exchange",
+      destructiveHint: true,
+      idempotentHint: true,
+    },
   }
 );
 

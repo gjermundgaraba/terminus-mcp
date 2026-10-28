@@ -11,6 +11,7 @@ peerDependencyRules:
     vite: "*"
     vitest: "*"
 catalog:
+  "@clanker-stuff/oxlint-config": 0.1.0
   "@effect/platform-node": 4.0.6
   "@effect/platform-node-shared": 4.0.6
   "@effect/tsgo": 0.57.0
@@ -27,6 +28,7 @@ catalogMode: prefer
 saveExact: true
 minimumReleaseAge: 1440
 minimumReleaseAgeExclude:
+  - "@clanker-stuff/*"
   - vite-plus
   - "@voidzero-dev/*"
   - oxlint

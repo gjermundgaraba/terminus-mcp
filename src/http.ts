@@ -14,10 +14,9 @@ import {
 } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 
-import { httpClientLayer } from "./http-client.js";
+import { noRedirectHttpClientLayer } from "./http-client.js";
 import { actions, server, services } from "./server.js";
 
-/** One entry of MCP_ALLOWED_ORIGINS, compared exactly with a request's Origin. */
 const Origin = Schema.String.pipe(
   Schema.decodeTo(
     Schema.Trimmed.check(
@@ -33,10 +32,6 @@ const Origin = Schema.String.pipe(
   )
 );
 
-/**
- * The MCP endpoint at /mcp and the container health check at /healthz. Neither authenticates
- * its caller, so the server belongs on an access-controlled network.
- */
 export const routes = Layer.unwrap(
   Effect.gen(function* () {
     const allowedOrigins = yield* Config.Array(
@@ -65,11 +60,10 @@ export const main = Layer.unwrap(
 
     return HttpRouter.serve(routes, { disableLogger: true }).pipe(
       Layer.provide(NodeHttpServer.layer(createServer, { host, port })),
-      // A screen's html is up to 1,000,000 characters, at most six bytes each once JSON-escaped.
       Layer.provide(
         Layer.succeed(HttpServerRequest.MaxBodySize, ByteSize.mebibytes(8))
       ),
-      Layer.provide(Layer.provide(services, httpClientLayer))
+      Layer.provide(Layer.provide(services, noRedirectHttpClientLayer))
     );
   })
 );

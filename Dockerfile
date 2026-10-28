@@ -6,7 +6,6 @@ WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml vite.config.ts oxlint.config.ts oxfmt.config.ts tsconfig.json ./
 RUN npm install --global "pnpm@$(node -p "require('./package.json').devEngines.packageManager.version")" \
     && pnpm config set store-dir /pnpm/store
-# Skip repository git hooks and the linter patch: the image never lints.
 RUN --mount=type=cache,target=/pnpm/store pnpm install --frozen-lockfile --ignore-scripts
 COPY src ./src
 COPY docs ./docs

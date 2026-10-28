@@ -6,7 +6,6 @@ import { assert, describe, it } from "@effect/vitest";
 import { Schema } from "effect";
 import { McpSchema } from "effect/ai";
 
-/** A JSON-RPC message from the server; a reply carries its request's `id`. */
 const Reply = Schema.fromJsonString(
   Schema.Struct({
     id: Schema.optionalKey(Schema.Int),
@@ -28,13 +27,14 @@ const call = (
   params: { name, arguments: args },
 });
 
+const unreachableTerminusUrl = "http://127.0.0.1:1";
+
 describe("stdio", () => {
   it("serves the built server over stdio", async () => {
     const server = spawn(process.execPath, ["dist/index.mjs"], {
       env: {
         ...process.env,
-        // Nothing listens here: a call that reaches Terminus fails as unreachable.
-        TERMINUS_URL: "http://127.0.0.1:1",
+        TERMINUS_URL: unreachableTerminusUrl,
         TERMINUS_LOGIN: "agent@example.test",
         TERMINUS_PASSWORD: "secret",
       },
@@ -88,9 +88,7 @@ describe("stdio", () => {
       return { isError, text: first.text };
     };
 
-    // The guide resolves from dist.
     assert.match(toolReply(2).text, /complete HTML document/u);
-    // A write reaches Terminus.
     const write = toolReply(3);
     assert.strictEqual(write.isError, true);
     assert.match(write.text, /Unable to reach Terminus/u);

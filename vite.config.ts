@@ -8,7 +8,6 @@ export default defineConfig({
   lint,
   pack: {
     deps: {
-      // Resolve subpaths of dependencies without an `exports` map, so the output loads in Node unbundled.
       resolveDepSubpath: true,
     },
     entry: ["src/index.ts", "src/http.ts"],

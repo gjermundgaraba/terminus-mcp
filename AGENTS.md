@@ -36,6 +36,6 @@ Before writing or reviewing Effect code, read `node_modules/effect/AGENTS.md` in
 
 # Linting and formatting
 
-`vp check` formats, lints and type-checks; `vp check --fix` applies the fixes. Oxlint runs Ultracite's core, anti-slop and Vitest presets and `@effect/tsgo`'s recommended Effect diagnostics, configured in `oxlint.config.ts`; Oxfmt uses Ultracite's formatter preset from `oxfmt.config.ts`. `vp install` patches Oxlint for the Effect diagnostics through the `prepare` script.
+`vp check` formats, lints and type-checks; `vp check --fix` applies the fixes. Lint comes from `@clanker-stuff/oxlint-config` through `config()` in `oxlint.config.ts`, with repo overrides there. Oxfmt uses Ultracite's formatter preset from `oxfmt.config.ts` and skips AGENTS.md, whose Vite+ block `vp config` rewrites on every install. `vp install` patches Oxlint for the Effect diagnostics through the `prepare` script.
 
-Every departure from the presets lives in `oxlint.config.ts`, with its reason beside it. The shared exception block there is identical in every Effect/Vite+ repository, so change it only with the maintainer, and every copy with it. Adding any other exception also needs the maintainer's approval. Fix a lint finding in the code; there are no inline `oxlint-disable` suppressions.
+Fix the code rather than add a lint exception; there are no inline `oxlint-disable` suppressions.

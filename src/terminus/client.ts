@@ -8,6 +8,7 @@ import {
   Redacted,
   Ref,
   Schema,
+  SchemaTransformation,
   Semaphore,
 } from "effect";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
@@ -48,13 +49,11 @@ import type {
 
 const maximumImageBytes = 10 * 1024 * 1024;
 
-/** A JSON request body; `JSON.stringify` leaves out its undefined fields. */
 interface Payload {
   readonly [field: string]: Payload | Schema.Json | undefined;
 }
 
-// Only the origin and path are kept, so credentials in the URL would be dropped silently.
-const terminusUrl = Schema.URL.check(
+const terminusBaseUrl = Schema.URL.check(
   Schema.makeFilter(
     ({ protocol }) => protocol === "http:" || protocol === "https:",
     {
@@ -64,13 +63,18 @@ const terminusUrl = Schema.URL.check(
   Schema.makeFilter(({ username, password }) => !username && !password, {
     message: "TERMINUS_URL must not contain credentials",
   })
+).pipe(
+  Schema.decodeTo(
+    Schema.String,
+    SchemaTransformation.transform({
+      decode: (url: URL) => `${url.origin}${url.pathname}`,
+      encode: (baseUrl: string) => new URL(baseUrl),
+    })
+  )
 );
 
-/** TERMINUS_URL, TERMINUS_LOGIN and TERMINUS_PASSWORD; the URL's query and fragment are dropped. */
 export const terminusConfig = Config.all({
-  baseUrl: Config.schema(terminusUrl, "TERMINUS_URL").pipe(
-    Config.map((url) => `${url.origin}${url.pathname}`)
-  ),
+  baseUrl: Config.schema(terminusBaseUrl, "TERMINUS_URL"),
   login: Config.NonEmptyString("TERMINUS_LOGIN"),
   password: Config.NonEmptyString("TERMINUS_PASSWORD").pipe(
     Config.map(Redacted.make)
@@ -81,7 +85,6 @@ const fail = (message: string) => Effect.fail(new TerminusError({ message }));
 
 const unexpected = fail("Terminus returned an unexpected response.");
 
-/** A JSON refusal; a validation problem names each field's errors. */
 const decodeProblem = Schema.decodeUnknownOption(
   Schema.fromJsonString(
     Schema.Struct({
@@ -92,7 +95,6 @@ const decodeProblem = Schema.decodeUnknownOption(
   )
 );
 
-/** The detail a JSON refusal gives, cut to 500 characters. */
 const detail = (text: string): string => {
   const found = Option.match(decodeProblem(text), {
     onNone: () => "",
@@ -112,7 +114,6 @@ const detail = (text: string): string => {
   return `: ${found.length > 500 ? `${found.slice(0, 499)}…` : found}`;
 };
 
-/** An exchange with its header names only. */
 const redacted = ({ headers, ...exchange }: typeof TerminusExchange.Type) => ({
   ...exchange,
   header_names: Object.keys(headers ?? {}),
@@ -167,10 +168,6 @@ const frameworkContext = (model: Model): FrameworkContext => {
 
 const extensionPath = (id: number) => `api/extensions/${id}`;
 
-/**
- * Every failure of one exchange as a TerminusError: a refusal names `refused`, its status and
- * the detail Terminus gave, and the exchange times out after a minute.
- */
 const asTerminusError =
   (refused: string) =>
   <A, R>(
@@ -203,7 +200,6 @@ const asTerminusError =
       })
     );
 
-/** The body of a successful response as `schema`. */
 const json =
   <S extends Schema.Constraint & { readonly DecodingServices: never }>(
     schema: S
@@ -215,10 +211,9 @@ const json =
 
 const make = Effect.gen(function* () {
   const { baseUrl, login: user, password } = yield* terminusConfig;
-  // Uploads are fetched by absolute URL, without the access token.
-  const uploads = yield* HttpClient.HttpClient;
+  const unauthenticatedHttp = yield* HttpClient.HttpClient;
 
-  const http = uploads.pipe(
+  const http = unauthenticatedHttp.pipe(
     HttpClient.mapRequest(
       flow(HttpClientRequest.prependUrl(baseUrl), HttpClientRequest.acceptJson)
     )
@@ -241,7 +236,6 @@ const make = Effect.gen(function* () {
       asTerminusError("Terminus login failed")
     );
 
-  // A refresh Terminus refuses, or that fails at all, falls back to a new login.
   const refresh = (current: typeof Tokens.Type) =>
     http
       .execute(
@@ -258,8 +252,7 @@ const make = Effect.gen(function* () {
         Effect.catch(() => login)
       );
 
-  // One renewal at a time: a caller that waited finds the token another one renewed.
-  const renew = (failedToken: string | undefined) =>
+  const renewUnlessAlreadyRenewed = (failedToken: string | undefined) =>
     renewal.withPermit(
       Effect.gen(function* () {
         const current = yield* Ref.get(tokens);
@@ -284,12 +277,14 @@ const make = Effect.gen(function* () {
 
   const accessToken = Ref.get(tokens).pipe(
     Effect.flatMap(
-      Option.match({ onNone: () => renew(undefined), onSome: Effect.succeed })
+      Option.match({
+        onNone: () => renewUnlessAlreadyRenewed(undefined),
+        onSome: Effect.succeed,
+      })
     ),
     Effect.map(({ access_token }) => access_token)
   );
 
-  /** A request with the current token, sent again with a renewed one if Terminus says it expired. */
   const respond = (
     method: "GET" | "POST" | "PATCH" | "DELETE",
     path: string,
@@ -317,7 +312,7 @@ const make = Effect.gen(function* () {
           (yield* response.text).includes("expired JWT access token"));
 
       return expired
-        ? yield* send((yield* renew(token)).access_token)
+        ? yield* send((yield* renewUnlessAlreadyRenewed(token)).access_token)
         : response;
     });
   };
@@ -335,7 +330,6 @@ const make = Effect.gen(function* () {
       asTerminusError("Terminus request failed")
     );
 
-  /** The one `item` at `path`, read, changed or deleted; `what` was not found if Terminus says so. */
   const one = <A>(
     method: "GET" | "PATCH" | "DELETE",
     path: string,
@@ -441,7 +435,7 @@ const make = Effect.gen(function* () {
       return yield* fail("Terminus returned an unsafe screen image URL.");
     }
 
-    const { type, body } = yield* uploads
+    const { type, body } = yield* unauthenticatedHttp
       .execute(HttpClientRequest.get(url))
       .pipe(
         Effect.flatMap((response) =>
@@ -642,6 +636,9 @@ const make = Effect.gen(function* () {
   // Terminus clears the models and devices a patch omits, checks a schedule's interval and unit
   // only together, and refuses an empty extension, so each patch carries the current models,
   // devices and schedule unless the input replaces them.
+  // https://github.com/usetrmnl/terminus/blob/0.78.0/app/aspects/extensions/updater.rb#L37-L38
+  // https://github.com/usetrmnl/terminus/blob/0.78.0/app/contracts/rules/cron.rb#L10
+  // https://github.com/usetrmnl/terminus/blob/0.78.0/app/contracts/api/extensions/patch.rb#L12
   const updateExtension = Effect.fn("Terminus.updateExtension")(function* (
     input: ExtensionUpdate
   ) {
@@ -706,7 +703,6 @@ const make = Effect.gen(function* () {
     return { exchange: yield* oneExchange("DELETE", ref) };
   });
 
-  // Each method takes its action's input and answers with its success; the two lists are Effects.
   return {
     getDisplayContext,
     listScreens,
@@ -729,7 +725,6 @@ const make = Effect.gen(function* () {
   };
 });
 
-/** The Terminus account TERMINUS_URL, TERMINUS_LOGIN and TERMINUS_PASSWORD name. */
 export class Terminus extends Context.Service<Terminus>()(
   "terminus-mcp/Terminus",
   { make }

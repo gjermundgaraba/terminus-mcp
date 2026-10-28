@@ -111,7 +111,7 @@ For remote MCP clients, use `http://<host>:8002/mcp`. It speaks MCP `2026-07-28`
 
 ## Verification
 
-`vp run ready` runs formatting, linting, strict type checks, the tests, and a production build. Linting and formatting use [Ultracite](https://www.ultracite.ai)'s presets with `@effect/tsgo`'s Effect diagnostics, configured in `oxlint.config.ts` and `oxfmt.config.ts`. Each rule the project relaxes is in `oxlint.config.ts`, with its reason. The tests call the tools through an in-memory MCP client against a fake Terminus, and build the server to call it over stdio as an MCP host would.
+`vp run ready` runs formatting, linting, strict type checks, the tests, and a production build. Linting comes from `@clanker-stuff/oxlint-config`, which builds on [Ultracite](https://www.ultracite.ai)'s presets and `@effect/tsgo`'s Effect diagnostics, through `config()` in `oxlint.config.ts`, with repo overrides there. Formatting uses Ultracite's preset from `oxfmt.config.ts`. The tests call the tools through an in-memory MCP client against a fake Terminus, and build the server to call it over stdio as an MCP host would.
 
 To verify against a configured Terminus instance:
 

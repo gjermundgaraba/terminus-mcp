@@ -18,6 +18,9 @@ const decodeRefusal = Schema.decodeUnknownSync(
   )
 );
 
+const decodeRefusalEvent = (eventStream: string) =>
+  decodeRefusal(eventStream.replace(/^data: /mu, ""));
+
 const listTools = (origin: string) =>
   Effect.map(
     send("tools/list", undefined, { origin }),
@@ -49,12 +52,11 @@ it.effect("advertises no tool-list changes and refuses subscriptions", () =>
       listChanged: false,
     });
 
-    // The refusal arrives as the one event of a text/event-stream body.
     const listen = yield* send("subscriptions/listen", {
       notifications: { toolsListChanged: true },
     });
 
-    const event = decodeRefusal((yield* listen.text).replace(/^data: /mu, ""));
+    const event = decodeRefusalEvent(yield* listen.text);
     assert.strictEqual(event.error.code, -32_601);
   }).pipe(Effect.provide(serve(noTerminus)))
 );

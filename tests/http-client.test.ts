@@ -4,7 +4,7 @@ import { assert, it } from "@effect/vitest";
 import { Effect, Schema } from "effect";
 import { HttpClient } from "effect/http";
 
-import { httpClientLayer } from "../src/http-client.js";
+import { noRedirectHttpClientLayer } from "../src/http-client.js";
 
 const decodeAddress = Schema.decodeUnknownSync(
   Schema.Struct({ port: Schema.Int })
@@ -43,5 +43,5 @@ it.effect("never follows a redirect", () =>
     const response = yield* HttpClient.get(`http://127.0.0.1:${port}/start`);
     assert.strictEqual(response.status, 302);
     assert.strictEqual(followed, 0);
-  }).pipe(Effect.scoped, Effect.provide(httpClientLayer))
+  }).pipe(Effect.scoped, Effect.provide(noRedirectHttpClientLayer))
 );

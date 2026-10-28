@@ -12,7 +12,6 @@ const build = () => {
   }
 };
 
-/** The stdio test runs the built server, so every run, a watch rerun too, builds it first. */
 export default function setup(project: TestProject) {
   build();
   project.onTestsRerun(build);

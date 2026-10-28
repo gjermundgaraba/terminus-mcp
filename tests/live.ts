@@ -5,13 +5,12 @@ import * as Action from "@gjermundgaraba/effect-actions/Action";
 import { Config, Effect, flow, Layer, Option, Redacted } from "effect";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 
-import { httpClientLayer } from "../src/http-client.js";
+import { noRedirectHttpClientLayer } from "../src/http-client.js";
 import { Actions, actions, services } from "../src/server.js";
 import { terminusConfig } from "../src/terminus/client.js";
 import { Tokens } from "../src/terminus/contracts.js";
 import type { FrameworkContext } from "../src/terminus/contracts.js";
 
-/** The IDs of what this run created and has not deleted yet. */
 interface Created {
   screen?: number;
   playlist?: number;
@@ -128,6 +127,9 @@ const verify = Effect.gen(function* () {
   delete created.screen;
 
   // Terminus answers for each missing resource differently.
+  // https://github.com/usetrmnl/terminus/blob/0.78.0/app/actions/api/screens/show.rb#L15-L19
+  // https://github.com/usetrmnl/terminus/blob/0.78.0/app/actions/api/screens/delete.rb#L27
+  // https://github.com/usetrmnl/terminus/blob/0.78.0/app/actions/api/playlists/delete.rb#L15-L20
   for (const missing of [
     Effect.flip(terminus.get_screen_image({ screen_id: screen.id })),
     Effect.flip(terminus.delete_screen({ screen_id: screen.id })),
@@ -136,7 +138,6 @@ const verify = Effect.gen(function* () {
     assert.match((yield* missing).message, /was not found/u);
   }
 
-  // Never built: no schedule, and no models or devices.
   const { extension } = yield* terminus.create_extension({
     name,
     label: "Terminus MCP verification",
@@ -150,7 +151,6 @@ const verify = Effect.gen(function* () {
   const { extensions } = yield* terminus.list_extensions();
   assert.ok(extensions.some(({ id }) => id === extension.id));
 
-  // A label alone still carries the schedule, so the extension is never empty.
   const renamed = yield* terminus.update_extension({
     extension_id: extension.id,
     label: "Terminus MCP verification updated",
@@ -217,8 +217,7 @@ const verify = Effect.gen(function* () {
   );
 });
 
-/** Deletes what a failed run created, without the actions that may have failed it. */
-const cleanup = Effect.gen(function* () {
+const deleteCreatedWithoutActions = Effect.gen(function* () {
   if (Object.values(created).every((id) => id === undefined)) {
     return;
   }
@@ -244,6 +243,7 @@ const cleanup = Effect.gen(function* () {
     .pipe(Effect.flatMap(HttpClientResponse.schemaBodyJson(Tokens)));
 
   // Deleting the extension deletes its exchanges.
+  // https://github.com/usetrmnl/terminus/blob/0.78.0/config/db/migrate/20260406095627_add_extension_exchange.rb#L10
   for (const [collection, id] of [
     ["api/extensions", created.extension],
     ["api/playlists", created.playlist],
@@ -264,8 +264,7 @@ const cleanup = Effect.gen(function* () {
 NodeRuntime.runMain(
   verify.pipe(
     Effect.scoped,
-    Effect.ensuring(Effect.orDie(cleanup)),
-    // The cleanup reads the HttpClient too.
-    Effect.provide(Layer.provideMerge(services, httpClientLayer))
+    Effect.ensuring(Effect.orDie(deleteCreatedWithoutActions)),
+    Effect.provide(Layer.provideMerge(services, noRedirectHttpClientLayer))
   )
 );

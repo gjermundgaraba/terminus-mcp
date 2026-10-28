@@ -24,10 +24,8 @@ import {
   trmnlDocs,
 } from "./fake.js";
 
-/** A JSON-RPC reply, its `result` left for the caller's schema. */
 const Reply = Schema.fromJsonString(Schema.Struct({ result: Schema.Unknown }));
 
-/** One JSON-RPC request to /mcp: its raw body, and its `result` decoded as `schema`. */
 const rpc = <
   S extends Schema.Constraint & { readonly DecodingServices: never },
 >(
@@ -42,7 +40,7 @@ const rpc = <
     return { body, result: yield* Schema.decodeUnknownEffect(schema)(result) };
   });
 
-const callTool = (
+const callToolRaw = (
   name: string,
   args: { readonly [key: string]: Schema.Json }
 ) => rpc("tools/call", McpSchema.CallToolResult, { name, arguments: args });
@@ -140,7 +138,7 @@ it.effect("redacts device credentials and reuses one login", () => {
   return Effect.gen(function* () {
     const mcp = yield* ActionMcp.client(Actions);
 
-    const { body: context } = yield* callTool("get_display_context", {});
+    const { body: context } = yield* callToolRaw("get_display_context", {});
     assert.notMatch(context, /api_key|mac_address|must-never|e0:72/iu);
     const { context: display } = yield* mcp.get_display_context();
     assert.strictEqual(display.device.label, "Desk");
@@ -157,7 +155,7 @@ it.effect("redacts device credentials and reuses one login", () => {
       "--screen-h": "480px",
     });
 
-    const { body: assigned } = yield* callTool("assign_playlist", {
+    const { body: assigned } = yield* callToolRaw("assign_playlist", {
       device_id: 40,
       playlist_id: 20,
     });
@@ -173,7 +171,7 @@ it.effect("redacts device credentials and reuses one login", () => {
 
         return terminus(({ method, url, body }) => {
           if (url.pathname !== "/api/devices/40" || method !== "PATCH") {
-            return null;
+            return undefined;
           }
 
           assert.deepStrictEqual(body, { device: { playlist_id: 20 } });
@@ -193,7 +191,10 @@ it.effect("returns a screen's rendered image beside its record", () =>
     assert.strictEqual(image.screen.id, 10);
     assert.deepStrictEqual(image.image, { data: png, mimeType: "image/png" });
 
-    const { result } = yield* callTool("get_screen_image", { screen_id: 10 });
+    const { result } = yield* callToolRaw("get_screen_image", {
+      screen_id: 10,
+    });
+
     assert.deepStrictEqual(result.structuredContent, { screen });
     assert.deepStrictEqual(
       result.content.map(({ type }) => type),
@@ -212,8 +213,7 @@ it.effect("creates and replaces screens", () => {
   return Effect.gen(function* () {
     const mcp = yield* ActionMcp.client(Actions);
 
-    // Sent raw: the typed client encodes, and refuses untrimmed text; the server trims it.
-    const { result: created } = yield* callTool("create_screen", {
+    const { result: created } = yield* callToolRaw("create_screen", {
       model_id: 1,
       label: "  Created ",
       name: "created",
@@ -242,7 +242,7 @@ it.effect("creates and replaces screens", () => {
       html: "<h1>Updated</h1>",
     });
 
-    const { result: identityUpdate } = yield* callTool("update_screen", {
+    const { result: identityUpdate } = yield* callToolRaw("update_screen", {
       screen_id: 10,
       model_id: 2,
       name: "different-screen",
@@ -280,7 +280,7 @@ it.effect("creates and replaces screens", () => {
             return json({ data: { ...screen, label: "Updated" } });
           }
 
-          return null;
+          return undefined;
         })
       )
     )
@@ -307,7 +307,7 @@ it.effect("deletes one screen or playlist", () => {
       serve(
         terminus(({ method, url }) => {
           if (method !== "DELETE") {
-            return null;
+            return undefined;
           }
 
           deleted.push(url.pathname);
@@ -320,7 +320,7 @@ it.effect("deletes one screen or playlist", () => {
             return json({ data: playlist });
           }
 
-          return null;
+          return undefined;
         })
       )
     )
@@ -359,8 +359,7 @@ it.effect("reports a missing resource however Terminus answers for it", () => {
     Effect.provide(
       terminusLayer(
         terminus(
-          ({ url }) =>
-            answers[Number(url.pathname.split("/").at(-1)) - 900] ?? null
+          ({ url }) => answers[Number(url.pathname.split("/").at(-1)) - 900]
         )
       )
     )
@@ -374,7 +373,7 @@ it.effect("lists and reads extensions without exchange header values", () =>
     const { extensions } = yield* mcp.list_extensions();
     assert.deepStrictEqual(extensions, [extension]);
 
-    const { body, result } = yield* callTool("get_extension", {
+    const { body, result } = yield* callToolRaw("get_extension", {
       extension_id: 50,
     });
 
@@ -442,7 +441,7 @@ it.effect(
         serve(
           terminus(({ method, url, body }) => {
             if (method !== "POST") {
-              return null;
+              return undefined;
             }
 
             sent.push(body);
@@ -455,7 +454,7 @@ it.effect(
               return json({ data: exchange });
             }
 
-            return null;
+            return undefined;
           })
         )
       )
@@ -503,7 +502,7 @@ it.effect(
         serve(
           terminus(({ method, url, body }) => {
             if (method !== "PATCH") {
-              return null;
+              return undefined;
             }
 
             patches.push(body);
@@ -516,7 +515,7 @@ it.effect(
               return json({ data: exchange });
             }
 
-            return null;
+            return undefined;
           })
         )
       )
@@ -548,7 +547,7 @@ it.effect(
         terminusLayer(
           terminus(({ method, url }) => {
             if (method !== "DELETE") {
-              return null;
+              return undefined;
             }
 
             if (url.pathname === "/api/extensions/50") {
@@ -559,7 +558,7 @@ it.effect(
               return json({ data: exchange });
             }
 
-            return null;
+            return undefined;
           })
         )
       )
@@ -599,7 +598,7 @@ it.effect("names each field Terminus refuses", () =>
                 },
                 422
               )
-            : null
+            : undefined
         )
       )
     )
@@ -655,7 +654,7 @@ it.effect(
             }
 
             if (url.pathname !== "/api/playlists/20" || method !== "PATCH") {
-              return null;
+              return undefined;
             }
 
             patches += 1;
@@ -747,7 +746,6 @@ it.effect("searches and reads the screen docs from one catalog", () =>
 
     assert.strictEqual(unknownDoc._tag, "DocsError");
     assert.match(unknownDoc.message, /Unknown screen documentation ID/u);
-    // Two searches and three reads share one catalog.
     assert.strictEqual(
       docsFetches.get("https://trmnl.com/framework"),
       catalogFetches + 1
@@ -798,7 +796,7 @@ it.effect("accepts zero dimensions and reports redacted device choices", () => {
             return json({ data: [model, pendingModel] });
           }
 
-          return null;
+          return undefined;
         })
       )
     )
@@ -867,7 +865,7 @@ it.effect(
               ? json({
                   data: { ...screen, uri: "https://attacker.test/image.png" },
                 })
-              : null
+              : undefined
           )
         )
       )
@@ -890,15 +888,16 @@ it.effect("stops reading an image past 10 MiB that declares no length", () => {
           return terminus()(request);
         }
 
-        // Endless, so only a reader that stops can finish.
-        const body = new ReadableStream<Uint8Array>({
+        const endlessBody = new ReadableStream<Uint8Array>({
           pull: (controller) => {
             sent += 1;
             controller.enqueue(mebibyte);
           },
         });
 
-        return new Response(body, { headers: { "Content-Type": "image/png" } });
+        return new Response(endlessBody, {
+          headers: { "Content-Type": "image/png" },
+        });
       })
     )
   );
@@ -916,7 +915,6 @@ it.effect(
         failed.message,
         /TRMNL documentation request failed \(HTTP 500\)/u
       );
-      // The failure is not cached.
       assert.ok((yield* docs.search({})).docs.length > 0);
     }).pipe(
       Effect.provide(

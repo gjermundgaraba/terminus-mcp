@@ -14,7 +14,6 @@ const NonNegativeInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
 const NullableString = Schema.NullOr(Schema.String);
 const NullableNumber = Schema.NullOr(Schema.Finite);
 
-/** A model's CSS, or none when Terminus has none or sends it in an unexpected shape. */
 const ModelCss = Schema.Struct({
   classes: Schema.Record(Schema.String, Schema.String),
   variables: Schema.Array(Schema.Tuple([Schema.String, Schema.String])),
@@ -77,13 +76,14 @@ export const Screen = Schema.Struct({
   uri: Schema.String,
 });
 
-/** How Terminus answers with HTTP 200 for a missing resource: a 404 problem, or empty data. */
+// How Terminus answers with HTTP 200 for a missing resource: a 404 problem, or empty data.
+// https://github.com/usetrmnl/terminus/blob/0.78.0/app/actions/api/screens/show.rb#L15-L19
+// https://github.com/usetrmnl/terminus/blob/0.78.0/app/actions/api/playlists/delete.rb#L15-L20
 const MissingAnswer = Schema.Union([
   Schema.Struct({ status: Schema.Literal(404) }),
   Schema.Struct({ data: Schema.Record(Schema.String, Schema.Never) }),
 ]);
 
-/** Any missing answer, as null. */
 const Missing = MissingAnswer.pipe(
   Schema.decodeTo(
     Schema.Null,
@@ -119,21 +119,22 @@ export const Playlist = Schema.Struct({
   items: Schema.Array(PlaylistItem),
 });
 
-/** An extension as Terminus answers with it; kind, mode and unit as sent, for forward compatibility. */
+const ForwardCompatibleEnum = Schema.String;
+
 export const Extension = Schema.Struct({
   id: PositiveInt,
   name: Schema.String,
   label: Schema.String,
   description: NullableString,
-  kind: Schema.String,
-  mode: Schema.String,
+  kind: ForwardCompatibleEnum,
+  mode: ForwardCompatibleEnum,
   tags: Schema.NullOr(Schema.Array(Schema.String)),
   static_body: Schema.Json,
   fields: Schema.Json,
   template: NullableString,
   data: Schema.Json,
   interval: Schema.Int,
-  unit: Schema.String,
+  unit: ForwardCompatibleEnum,
   days: Schema.NullOr(Schema.Array(Schema.String)),
   last_day_of_month: Schema.Boolean,
   start_at: NullableString,
@@ -145,7 +146,7 @@ export const Extension = Schema.Struct({
 
 const exchangeFields = {
   id: PositiveInt,
-  verb: Schema.String,
+  verb: ForwardCompatibleEnum,
   template: Schema.String,
   body: Schema.Json,
   data: Schema.Json,
@@ -155,21 +156,19 @@ const exchangeFields = {
   updated_at: Schema.String,
 };
 
-/** An exchange as Terminus answers with it, header values included. */
 export const TerminusExchange = Schema.Struct({
   ...exchangeFields,
   headers: Schema.NullOr(Schema.Record(Schema.String, Schema.Json)),
 });
 
-/** An exchange with its header names only, since header values are where credentials live. */
-export const Exchange = Schema.Struct({
+export const RedactedExchange = Schema.Struct({
   ...exchangeFields,
   header_names: Schema.Array(Schema.String),
 });
 
 export const ExtensionDetail = Schema.Struct({
   extension: Extension,
-  exchanges: Schema.Array(Exchange),
+  exchanges: Schema.Array(RedactedExchange),
 });
 
 export const Tokens = Schema.Struct({
@@ -197,14 +196,17 @@ export const SavedPlaylist = Schema.Struct({
   playlist: Playlist,
 });
 
-const shortText = [Schema.isMinLength(1), Schema.isMaxLength(255)] as const;
+const shortTextBounds = [
+  Schema.isMinLength(1),
+  Schema.isMaxLength(255),
+] as const;
 
-/** Trimmed, and bounded on both sides, so the tool's input schema lists the bounds too. */
-export const ShortText = Schema.String.check(...shortText).pipe(
-  Schema.decodeTo(
-    Schema.Trimmed.check(...shortText),
-    SchemaTransformation.trim()
-  )
+const UntrimmedShortText = Schema.String.check(...shortTextBounds);
+
+const TrimmedShortText = Schema.Trimmed.check(...shortTextBounds);
+
+export const ShortText = UntrimmedShortText.pipe(
+  Schema.decodeTo(TrimmedShortText, SchemaTransformation.trim())
 );
 
 const LongText = Schema.String.check(
@@ -342,7 +344,6 @@ export const ExtensionInput = Schema.Struct(extensionFields);
 
 export const ExtensionRef = Schema.Struct({ extension_id: PositiveInt });
 
-/** Any of an extension's fields; the ones creating it requires are optional. */
 export const ExtensionUpdate = Schema.Struct({
   ...ExtensionRef.fields,
   ...Struct.mapPick(
@@ -377,7 +378,6 @@ export const ExchangeRef = Schema.Struct({
   exchange_id: PositiveInt,
 });
 
-/** Any of an exchange's fields. */
 export const ExchangeUpdate = Schema.Struct({
   ...ExchangeRef.fields,
   ...Struct.mapPick(exchangeInputFields, ["template"], Schema.optionalKey),
@@ -389,7 +389,6 @@ export const ListOf = <S extends Schema.Top>(item: S) =>
 export const OneOf = <S extends Schema.Top>(item: S) =>
   Schema.Struct({ data: item });
 
-/** One `item`, or null if Terminus says it is missing. */
 export const OneOrMissing = <S extends Schema.Top>(item: S) =>
   Schema.Union([OneOf(item), Missing]);
 
