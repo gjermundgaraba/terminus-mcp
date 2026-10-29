@@ -48,7 +48,6 @@
     "@effect/vitest": "catalog:",
     "@types/node": "^26.0.0",
     "oxfmt": "catalog:",
-    "oxlint": "catalog:",
     "typescript": "7.0.2",
     "ultracite": "catalog:",
     "vite": "catalog:",
