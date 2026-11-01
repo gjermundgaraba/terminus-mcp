@@ -1,5 +1,6 @@
 import * as Action from "@gjermundgaraba/effect-actions/Action";
-import { Effect, Layer, Schema } from "effect";
+import type * as ActionMcp from "@gjermundgaraba/effect-actions/ActionMcp";
+import { Duration, Effect, Layer, Schema } from "effect";
 
 import packageJson from "../package.json" with { type: "json" };
 import {
@@ -47,7 +48,10 @@ export const server = {
     "complete document; playlist saves replace the complete ordered item list. " +
     "Extensions rebuild their screens on their schedule; read the extension section " +
     `of ${AUTHORING_GUIDE_ID} before writing one. Deletion cannot be undone.`,
-};
+  cacheHints: {
+    tools: { ttl: Duration.minutes(5), cacheScope: "private" },
+  },
+} satisfies ActionMcp.Options;
 
 export const services = Layer.mergeAll(Terminus.layer, ScreenDocs.layer);
 

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+Built on Effect `4.1.1` and `@gjermundgaraba/effect-actions` `0.26.1`.
+
+### Changes
+
+- A `2026-07-28` `tools/list` result tells the client it may keep the list for five minutes, with `ttlMs: 300000` and `cacheScope: "private"`, over stdio and HTTP, where it said `ttlMs: 0`. The tools are the same for every caller and fixed at startup, so only a restart onto another version changes them, and a client may list the old tools for up to five minutes after it. `server/discover` and the earlier revisions are unchanged.
+
 ## 0.5.0
 
 Built on Effect `4.0.6` and `@gjermundgaraba/effect-actions` `0.23.0`.

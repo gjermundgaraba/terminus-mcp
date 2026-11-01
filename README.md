@@ -107,7 +107,7 @@ The HTTP entrypoint additionally accepts:
 
 Credentials will never be accepted as MCP tool arguments, returned in tool results, or intentionally written to logs. Inject them with the MCP host's secret-management facility instead of committing them to its configuration.
 
-For remote MCP clients, use `http://<host>:8002/mcp`. It speaks MCP `2026-07-28`, `2025-11-25` and `2025-06-18`, as the stdio server does. A client on a 2025 revision opens a session, which lasts until the client ends it or the server stops. The tools never change after startup: a `2026-07-28` client cannot subscribe to them, and a 2025 session, though told they may change, never hears that they have. `/healthz` provides a container health check. The HTTP endpoint has no application-level authentication, so whoever reaches it can call every tool and open sessions: it must remain on an access-controlled internal network.
+For remote MCP clients, use `http://<host>:8002/mcp`. It speaks MCP `2026-07-28`, `2025-11-25` and `2025-06-18`, as the stdio server does. A client on a 2025 revision opens a session, which lasts until the client ends it or the server stops. The tools never change after startup: a `2026-07-28` client cannot subscribe to them, and a 2025 session, though told they may change, never hears that they have. Every caller gets the same tools, so a `2026-07-28` `tools/list` result carries `ttlMs: 300000` and `cacheScope: "private"`: a client may reuse it for five minutes, and may see a new release's tools that much later. `/healthz` provides a container health check. The HTTP endpoint has no application-level authentication, so whoever reaches it can call every tool and open sessions: it must remain on an access-controlled internal network.
 
 ## Verification
 

@@ -12,6 +12,13 @@ const Discovery = Schema.Struct({
   }),
 });
 
+const CacheHint = Schema.Struct({
+  result: Schema.Struct({ ttlMs: Schema.Int, cacheScope: Schema.String }),
+});
+
+const cacheHintOf = (method: string) =>
+  Effect.flatMap(send(method), HttpClientResponse.schemaBodyJson(CacheHint));
+
 const decodeRefusal = Schema.decodeUnknownSync(
   Schema.fromJsonString(
     Schema.Struct({ error: Schema.Struct({ code: Schema.Int }) })
@@ -58,6 +65,19 @@ it.effect("advertises no tool-list changes and refuses subscriptions", () =>
 
     const event = decodeRefusalEvent(yield* listen.text);
     assert.strictEqual(event.error.code, -32_601);
+  }).pipe(Effect.provide(serve(noTerminus)))
+);
+
+it.effect("lets a client keep the tool list for five minutes", () =>
+  Effect.gen(function* () {
+    assert.deepStrictEqual((yield* cacheHintOf("tools/list")).result, {
+      ttlMs: 300_000,
+      cacheScope: "private",
+    });
+    assert.deepStrictEqual((yield* cacheHintOf("server/discover")).result, {
+      ttlMs: 0,
+      cacheScope: "private",
+    });
   }).pipe(Effect.provide(serve(noTerminus)))
 );
 
