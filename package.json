@@ -46,7 +46,7 @@
     "@clanker-stuff/oxlint-config": "catalog:",
     "@effect/tsgo": "catalog:",
     "@effect/vitest": "catalog:",
-    "@types/node": "^26.0.0",
+    "@types/node": "26.6.6",
     "oxfmt": "catalog:",
     "typescript": "7.0.2",
     "ultracite": "catalog:",
@@ -57,7 +57,7 @@
   "devEngines": {
     "packageManager": {
       "name": "pnpm",
-      "version": "12.15.0",
+      "version": "12.17.0",
       "onFail": "download"
     }
   },
