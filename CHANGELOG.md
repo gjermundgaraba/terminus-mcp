@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0
+
+Built on Effect `4.1.2` and `@gjermundgaraba/effect-actions` `0.29.0`.
+
+### Breaking changes
+
+- Requires Node `26.13` or later, where it required `26.12`.
+
 ## 0.5.1
 
 Built on Effect `4.1.1` and `@gjermundgaraba/effect-actions` `0.26.1`.
