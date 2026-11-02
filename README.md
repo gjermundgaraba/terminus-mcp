@@ -2,7 +2,7 @@
 
 An MCP server for agents that create and publish content to a [Terminus](https://github.com/usetrmnl/terminus) instance.
 
-The tools are [effect-actions](https://github.com/gjermundgaraba/effect-actions) actions on [Effect](https://effect.website) v4, served over stdio or Streamable HTTP. It needs Node.js 26.12 or newer.
+The tools are [effect-actions](https://github.com/gjermundgaraba/effect-actions) actions on [Effect](https://effect.website) v4, served over stdio or Streamable HTTP. It needs Node.js 26.13 or newer.
 
 ## Status
 
