@@ -177,8 +177,8 @@ catalogs:
       specifier: 4.1.2
       version: 4.1.2
     '@gjermundgaraba/effect-actions':
-      specifier: 0.26.1
-      version: 0.26.1
+      specifier: 0.28.0
+      version: 0.28.0
     effect:
       specifier: 4.1.2
       version: 4.1.2
@@ -211,7 +211,7 @@ importers:
         version: 4.1.2(effect@4.1.2)(redis@6.3.0)
       '@gjermundgaraba/effect-actions':
         specifier: 'catalog:'
-        version: 0.26.1(effect@4.1.2)
+        version: 0.28.0(effect@4.1.2)
       effect:
         specifier: 'catalog:'
         version: 4.1.2
@@ -508,8 +508,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@gjermundgaraba/effect-actions@0.26.1':
-    resolution: {integrity: sha512-+qLKEr+1bv7YOA8Xl8SPy9AJEiTDgfIQsVEQ/LSAn/a1uDm4rbrrVaa6lF5SD+pO344bTppfDayGlCeOPplgOw==}
+  '@gjermundgaraba/effect-actions@0.28.0':
+    resolution: {integrity: sha512-zIlNBM72HxkCbKZ6VIde/kTU2Il54NZqC2UUG5IxgtB+kmfqEG5s+d0sgXJ05PTa2xQAsmLG+SHgdEReBA4GOg==}
     engines: {node: '>=26.12.0'}
     peerDependencies:
       effect: ~4.1.1
@@ -2082,7 +2082,7 @@ snapshots:
   '@esbuild/win32-x64@0.28.1':
     optional: true
 
-  '@gjermundgaraba/effect-actions@0.26.1(effect@4.1.2)':
+  '@gjermundgaraba/effect-actions@0.28.0(effect@4.1.2)':
     dependencies:
       effect: 4.1.2
 
