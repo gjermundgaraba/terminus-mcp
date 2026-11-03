@@ -6,13 +6,13 @@ The first release will be a curated content-publishing interface, not a one-to-o
 
 It will cover screen creation, playlist management, extensions, safe discovery, and one narrow device mutation: assigning a playlist. Authentication remains an internal implementation detail.
 
-This design targets Terminus `0.78.0`. Terminus marks its server API as evolving, so compatibility with a release is tested rather than assumed.
+This design targets Terminus `0.79.0`. Terminus marks its server API as evolving, so compatibility with a release is tested rather than assumed.
 
 References:
 
-- [Terminus API](https://github.com/usetrmnl/terminus/blob/0.78.0/doc/api.adoc)
-- [Terminus routes](https://github.com/usetrmnl/terminus/blob/0.78.0/config/routes.rb)
-- [Terminus HTML sanitizer](https://github.com/usetrmnl/terminus/blob/0.78.0/config/sanitize.yml)
+- [Terminus API](https://github.com/usetrmnl/terminus/blob/0.79.0/doc/api.adoc)
+- [Terminus routes](https://github.com/usetrmnl/terminus/blob/0.79.0/config/routes.rb)
+- [Terminus HTML sanitizer](https://github.com/usetrmnl/terminus/blob/0.79.0/config/sanitize.yml)
 - [effect-actions](https://github.com/gjermundgaraba/effect-actions)
 
 ## Goals
@@ -191,8 +191,8 @@ The data an exchange fetched is returned whole by `get_extension`, without a siz
 - Playlist updates replace their item collection. The tool must make that replacement explicit and avoid presenting it as an additive update.
 - `GET /api/screens/:id` answers a missing screen with HTTP 200 and a 404 problem as its body.
 - A `manual` playlist stays on its current screen until the device's button moves it; before `0.78.0` every refresh advanced it, as for `automatic`.
-- There is no scoped token or service-account API in Terminus `0.78.0`.
-- Extension and exchange reads answer a missing resource like screens do; patches and deletes answer it with HTTP 404, and a playlist delete with empty `data`. A missing extension's exchange list is empty.
+- There is no scoped token or service-account API in Terminus `0.79.0`.
+- Extension and exchange reads answer a missing resource like screens do; patches and deletes answer it with HTTP 404, as a playlist delete does from `0.79.0`; before, it answered with empty `data`. A missing extension's exchange list is empty.
 - An extension patch clears the models and devices it omits, checks a schedule's `interval` and `unit` only together, and refuses an empty `extension`. `update_extension` reads the extension first and sends its current models, devices, and schedule unless the input replaces them.
 - The API cannot build an extension's screens or preview them; they appear only on its schedule.
 - `GET /api/extensions` lists extensions directly in `data`, not each wrapped in its own `data` as the API documentation shows.

@@ -636,9 +636,9 @@ const make = Effect.gen(function* () {
   // Terminus clears the models and devices a patch omits, checks a schedule's interval and unit
   // only together, and refuses an empty extension, so each patch carries the current models,
   // devices and schedule unless the input replaces them.
-  // https://github.com/usetrmnl/terminus/blob/0.78.0/app/aspects/extensions/updater.rb#L37-L38
-  // https://github.com/usetrmnl/terminus/blob/0.78.0/app/contracts/rules/cron.rb#L10
-  // https://github.com/usetrmnl/terminus/blob/0.78.0/app/contracts/api/extensions/patch.rb#L12
+  // https://github.com/usetrmnl/terminus/blob/0.79.0/app/aspects/extensions/updater.rb#L37-L38
+  // https://github.com/usetrmnl/terminus/blob/0.79.0/app/contracts/rules/cron.rb#L10
+  // https://github.com/usetrmnl/terminus/blob/0.79.0/app/contracts/api/extensions/patch.rb#L12
   const updateExtension = Effect.fn("Terminus.updateExtension")(function* (
     input: ExtensionUpdate
   ) {

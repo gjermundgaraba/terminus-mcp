@@ -76,8 +76,9 @@ export const Screen = Schema.Struct({
   uri: Schema.String,
 });
 
-// How Terminus answers with HTTP 200 for a missing resource: a 404 problem, or empty data.
-// https://github.com/usetrmnl/terminus/blob/0.78.0/app/actions/api/screens/show.rb#L15-L19
+// How Terminus answers with HTTP 200 for a missing resource: a 404 problem, or, from a playlist
+// delete before 0.79.0, empty data.
+// https://github.com/usetrmnl/terminus/blob/0.79.0/app/actions/api/screens/show.rb#L15-L19
 // https://github.com/usetrmnl/terminus/blob/0.78.0/app/actions/api/playlists/delete.rb#L15-L20
 const MissingAnswer = Schema.Union([
   Schema.Struct({ status: Schema.Literal(404) }),

@@ -6,7 +6,7 @@ The tools are [effect-actions](https://github.com/gjermundgaraba/effect-actions)
 
 ## Status
 
-The curated publishing API is implemented and verified against Terminus `0.78.0`. See [docs/design.md](docs/design.md) for the API boundary and security model.
+The curated publishing API is implemented and verified against Terminus `0.79.0`. See [docs/design.md](docs/design.md) for the API boundary and security model.
 
 The server exposes these tools:
 

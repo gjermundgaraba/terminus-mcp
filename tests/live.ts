@@ -127,9 +127,9 @@ const verify = Effect.gen(function* () {
   delete created.screen;
 
   // Terminus answers for each missing resource differently.
-  // https://github.com/usetrmnl/terminus/blob/0.78.0/app/actions/api/screens/show.rb#L15-L19
-  // https://github.com/usetrmnl/terminus/blob/0.78.0/app/actions/api/screens/delete.rb#L27
-  // https://github.com/usetrmnl/terminus/blob/0.78.0/app/actions/api/playlists/delete.rb#L15-L20
+  // https://github.com/usetrmnl/terminus/blob/0.79.0/app/actions/api/screens/show.rb#L15-L19
+  // https://github.com/usetrmnl/terminus/blob/0.79.0/app/actions/api/screens/delete.rb#L27
+  // https://github.com/usetrmnl/terminus/blob/0.79.0/app/actions/api/playlists/delete.rb#L18-L22
   for (const missing of [
     Effect.flip(terminus.get_screen_image({ screen_id: screen.id })),
     Effect.flip(terminus.delete_screen({ screen_id: screen.id })),
@@ -243,7 +243,7 @@ const deleteCreatedWithoutActions = Effect.gen(function* () {
     .pipe(Effect.flatMap(HttpClientResponse.schemaBodyJson(Tokens)));
 
   // Deleting the extension deletes its exchanges.
-  // https://github.com/usetrmnl/terminus/blob/0.78.0/config/db/migrate/20260406095627_add_extension_exchange.rb#L10
+  // https://github.com/usetrmnl/terminus/blob/0.79.0/config/db/migrate/20260406095627_add_extension_exchange.rb#L10
   for (const [collection, id] of [
     ["api/extensions", created.extension],
     ["api/playlists", created.playlist],
