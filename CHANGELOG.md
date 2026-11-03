@@ -4,6 +4,10 @@
 
 Supports Terminus `0.79.0`. `0.78.0` still works: the endpoints and fields the tools use are unchanged, and a missing playlist is reported as not found whether Terminus answers with HTTP 404, as `0.79.0` does, or with empty `data`.
 
+### Changes
+
+- `update_display_settings` changes a device's label, refresh rate, or sleep window, keeping the settings it is not given. `get_display_context` and `assign_playlist` return the device's `sleep_start_at` and `sleep_stop_at`.
+
 ## 0.6.0
 
 Built on Effect `4.1.2` and `@gjermundgaraba/effect-actions` `0.29.0`.

@@ -4,7 +4,7 @@
 
 The first release will be a curated content-publishing interface, not a one-to-one proxy for the Terminus API.
 
-It will cover screen creation, playlist management, extensions, safe discovery, and one narrow device mutation: assigning a playlist. Authentication remains an internal implementation detail.
+It will cover screen creation, playlist management, extensions, safe discovery, and two narrow device mutations: assigning a playlist, and setting when a display refreshes and sleeps. Authentication remains an internal implementation detail.
 
 This design targets Terminus `0.79.0`. Terminus marks its server API as evolving, so compatibility with a release is tested rather than assumed.
 
@@ -25,6 +25,7 @@ An agent should be able to:
 4. Create or replace a screen from complete HTML and CSS.
 5. Create or replace an ordered playlist and assign it to a device.
 6. Create extensions that Terminus rebuilds into screens on a schedule, from static data, fetched data, or data the agent supplies.
+7. Set how often a display asks for its next screen, and when it sleeps.
 
 The server should be safe to run as a local stdio process or a Streamable HTTP service on an access-controlled network, with Terminus credentials provided by its runtime.
 
@@ -34,7 +35,7 @@ The server should be safe to run as a local stdio process or a Streamable HTTP s
 | --- | --- | --- |
 | Authentication | Internal | Login and JWT refresh are never MCP tools. |
 | Models | Read-only | Supplies rendering dimensions and display capabilities. |
-| Devices | Restricted read and write | Redacted status plus `playlist_id` assignment only. |
+| Devices | Restricted read and write | Redacted status, `playlist_id` assignment, and label, refresh rate, and sleep window only. |
 | Screens | List, create, update, and delete | Includes retrieval of the rendered image. |
 | Playlists | List, create, update, and delete | Supports ordered screen membership. |
 | Extensions | List, create, update, and delete | Includes their exchanges, without header values. |
@@ -62,6 +63,7 @@ The server should be safe to run as a local stdio process or a Streamable HTTP s
 | `update_screen` | Replace an existing screen's rendered content. |
 | `save_playlist` | Create or replace a playlist and its complete ordered screen list. |
 | `assign_playlist` | Set only the `playlist_id` of a device. |
+| `update_display_settings` | Set only the label, `refresh_rate`, and sleep window of a device. |
 
 ### Extensions
 
@@ -101,10 +103,12 @@ Do not expose firmware, model, or full device CRUD. These operations can:
 
 - install untrusted firmware or make a device unavailable;
 - alter image conversion for every screen associated with a model;
-- change device identity, firmware flags, commands, sleep settings, or other operational configuration;
+- change device identity, firmware flags, commands, or other operational configuration;
 - delete a physical device's server-side registration.
 
 Read-only model data remains necessary for screen rendering.
+
+A device's label, refresh rate, and sleep window are the exception: they decide when content shows, which is part of publishing it, and `update_display_settings` changes nothing else. Its image timeout, a firmware download limit, stays excluded.
 
 ### Generic API proxy
 
@@ -191,6 +195,8 @@ The data an exchange fetched is returned whole by `get_extension`, without a siz
 - Playlist updates replace their item collection. The tool must make that replacement explicit and avoid presenting it as an additive update.
 - `GET /api/screens/:id` answers a missing screen with HTTP 200 and a 404 problem as its body.
 - A `manual` playlist stays on its current screen until the device's button moves it; before `0.78.0` every refresh advanced it, as for `automatic`.
+- A device patch for a missing device fails with HTTP 500, not 404.
+- Sleep times are the Terminus server's local time, returned as `HH:MM:SS`. Terminus refuses a sleep start without a stop, and while a device is asleep it serves Terminus's sleep screen without moving the playlist.
 - There is no scoped token or service-account API in Terminus `0.79.0`.
 - Extension and exchange reads answer a missing resource like screens do; patches and deletes answer it with HTTP 404, as a playlist delete does from `0.79.0`; before, it answered with empty `data`. A missing extension's exchange list is empty.
 - An extension patch clears the models and devices it omits, checks a schedule's `interval` and `unit` only together, and refuses an empty `extension`. `update_extension` reads the extension first and sends its current models, devices, and schedule unless the input replaces them.

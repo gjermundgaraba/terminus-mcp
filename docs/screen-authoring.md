@@ -50,6 +50,7 @@ Omit `mode` for text, charts, and interface layouts. Set `mode` to `dither` for 
 3. Call `get_screen_image` and inspect the rendered image before publishing.
 4. Correct the complete document with `update_screen`; original HTML cannot be retrieved from Terminus.
 5. Use `save_playlist`, then `assign_playlist` when the result is ready.
+6. If the content changes more or less often than the display refreshes, set its `refresh_rate` with `update_display_settings`. The device's `refresh_rate` in `get_display_context` is in seconds, and a shorter one drains the battery faster.
 
 Framework CSS and JavaScript are intentional external resources. Other remote resources in generated HTML cause requests from the Terminus renderer and should be avoided unless the operator explicitly wants them.
 

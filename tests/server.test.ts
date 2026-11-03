@@ -84,6 +84,7 @@ it.effect("lists the curated tools with their hints", () =>
       "read_screen_doc",
       "save_playlist",
       "search_screen_docs",
+      "update_display_settings",
       "update_extension",
       "update_extension_exchange",
       "update_screen",
@@ -179,6 +180,65 @@ it.effect("redacts device credentials and reuses one login", () => {
           return json({ data: device });
         })(request);
       })
+    )
+  );
+});
+
+it.effect("changes only the display settings it is given", () => {
+  const patches: unknown[] = [];
+
+  return Effect.gen(function* () {
+    const mcp = yield* ActionMcp.client(Actions);
+
+    const { body } = yield* callToolRaw("update_display_settings", {
+      device_id: 40,
+      refresh_rate: 1800,
+      sleep: { start_at: "22:30", stop_at: "06:00:00" },
+    });
+
+    assert.notMatch(body, /api_key|mac_address|must-never/iu);
+    yield* mcp.update_display_settings({ device_id: 40, label: "Kitchen" });
+    yield* mcp.update_display_settings({ device_id: 40, sleep: null });
+
+    const empty = yield* Effect.flip(
+      mcp.update_display_settings({ device_id: 40 })
+    );
+
+    assert.match(
+      empty.message,
+      /at least one of label, refresh_rate or sleep/u
+    );
+
+    const { result: badTime } = yield* callToolRaw("update_display_settings", {
+      device_id: 40,
+      sleep: { start_at: "24:00", stop_at: "06:00" },
+    });
+
+    assert.strictEqual(badTime.isError, true);
+    assert.deepStrictEqual(patches, [
+      {
+        device: {
+          refresh_rate: 1800,
+          sleep_start_at: "22:30",
+          sleep_stop_at: "06:00:00",
+        },
+      },
+      { device: { label: "Kitchen" } },
+      { device: { sleep_start_at: null, sleep_stop_at: null } },
+    ]);
+  }).pipe(
+    Effect.provide(
+      serve(
+        terminus(({ method, url, body }) => {
+          if (url.pathname !== "/api/devices/40" || method !== "PATCH") {
+            return undefined;
+          }
+
+          patches.push(body);
+
+          return json({ data: device });
+        })
+      )
     )
   );
 });

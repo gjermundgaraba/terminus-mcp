@@ -14,6 +14,7 @@ import {
   Assignment,
   DisplayContext,
   DisplayQuery,
+  DisplaySettings,
   RedactedExchange,
   ExchangeInput,
   ExchangeRef,
@@ -224,6 +225,22 @@ export const AssignPlaylist = Action.make("assign_playlist", {
   },
 });
 
+export const UpdateDisplaySettings = Action.make("update_display_settings", {
+  description:
+    "Change a device's label, refresh rate, or sleep window; omitted settings are kept. " +
+    "The display picks up a change at its next request.",
+  input: DisplaySettings,
+  success: { device: SafeDevice },
+  error: TerminusError,
+  readOnly: false,
+  caller: Action.Anyone,
+  mcp: {
+    title: "Update display settings",
+    destructiveHint: false,
+    idempotentHint: true,
+  },
+});
+
 export const ListExtensions = Action.make("list_extensions", {
   description:
     "List Terminus extensions: Liquid templates Terminus renders into screens named " +
@@ -366,6 +383,7 @@ export const Actions = [
   SavePlaylist,
   DeletePlaylist,
   AssignPlaylist,
+  UpdateDisplaySettings,
   ListExtensions,
   GetExtension,
   CreateExtension,
@@ -395,6 +413,7 @@ export const actions = Action.implement(
       save_playlist: terminus.savePlaylist,
       delete_playlist: terminus.deletePlaylist,
       assign_playlist: terminus.assignPlaylist,
+      update_display_settings: terminus.updateDisplaySettings,
       list_extensions: () => terminus.listExtensions,
       get_extension: terminus.getExtension,
       create_extension: terminus.createExtension,

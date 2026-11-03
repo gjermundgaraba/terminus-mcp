@@ -34,6 +34,8 @@ export const SafeDevice = Schema.Struct({
   charging: Schema.Boolean,
   refresh_rate: PositiveInt,
   image_cached: Schema.Boolean,
+  sleep_start_at: NullableString,
+  sleep_stop_at: NullableString,
   synced_at: NullableString,
   width: NonNegativeInt,
   height: NonNegativeInt,
@@ -235,6 +237,32 @@ export const Assignment = Schema.Struct({
   playlist_id: PositiveInt,
 });
 
+const ClockTime = Schema.String.check(
+  Schema.isPattern(/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/u)
+).annotate({ description: "HH:MM or HH:MM:SS." });
+
+export const DisplaySettings = Schema.Struct({
+  device_id: PositiveInt,
+  label: Schema.optionalKey(ShortText),
+  refresh_rate: Schema.optionalKey(
+    PositiveInt.annotate({
+      description:
+        "Seconds between the display's requests for its next screen. Shorter shows new " +
+        "content sooner and drains the battery faster.",
+    })
+  ),
+  sleep: Schema.optionalKey(
+    Schema.NullOr(
+      Schema.Struct({ start_at: ClockTime, stop_at: ClockTime })
+    ).annotate({
+      description:
+        "A daily window, in the Terminus server's local time, when the display shows " +
+        "Terminus's sleep screen and its playlist does not move; it may cross midnight. " +
+        "null removes it.",
+    })
+  ),
+});
+
 export const ScreenFilters = Schema.Struct({
   model_id: Schema.optionalKey(PositiveInt),
   query: Schema.optionalKey(ShortText),
@@ -408,6 +436,8 @@ export type ScreenRef = typeof ScreenRef.Type;
 export type PlaylistRef = typeof PlaylistRef.Type;
 
 export type Assignment = typeof Assignment.Type;
+
+export type DisplaySettings = typeof DisplaySettings.Type;
 
 export type ScreenFilters = typeof ScreenFilters.Type;
 

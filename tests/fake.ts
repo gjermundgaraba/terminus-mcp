@@ -208,6 +208,8 @@ export const device = {
   charging: false,
   refresh_rate: 900,
   image_cached: true,
+  sleep_start_at: null,
+  sleep_stop_at: null,
   synced_at: "2026-01-01T00:00:00Z",
   width: 800,
   height: 480,

@@ -60,6 +60,33 @@ const verify = Effect.gen(function* () {
     "The live device needs an existing playlist for a no-op assignment test"
   );
 
+  const { label, refresh_rate, sleep_start_at, sleep_stop_at } = device;
+
+  yield* Effect.addFinalizer(() =>
+    terminus
+      .update_display_settings({
+        device_id: device.id,
+        label,
+        refresh_rate,
+        sleep:
+          sleep_start_at === null || sleep_stop_at === null
+            ? null
+            : { start_at: sleep_start_at, stop_at: sleep_stop_at },
+      })
+      .pipe(Effect.orDie)
+  );
+
+  const { device: changed } = yield* terminus.update_display_settings({
+    device_id: device.id,
+    refresh_rate: refresh_rate + 1,
+    sleep: { start_at: "03:00", stop_at: "03:00:01" },
+  });
+
+  assert.equal(changed.refresh_rate, refresh_rate + 1);
+  assert.equal(changed.sleep_start_at, "03:00:00");
+  assert.equal(changed.sleep_stop_at, "03:00:01");
+  assert.equal(changed.label, label);
+
   yield* terminus.list_screens({ model_id: model.id });
   yield* terminus.list_playlists();
   const { docs: entryPoints } = yield* terminus.search_screen_docs();

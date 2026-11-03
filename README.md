@@ -14,7 +14,7 @@ The server exposes these tools:
 - `search_screen_docs` and `read_screen_doc` for agent-readable authoring and TRMNL Framework documentation;
 - `create_screen` and `update_screen` for complete HTML/CSS screens;
 - `save_playlist` for complete ordered playlist replacement;
-- `assign_playlist` for the single allowed device mutation;
+- `assign_playlist` and `update_display_settings` for the only device changes allowed: a device's playlist, label, refresh rate, and sleep window;
 - `list_extensions`, `get_extension`, `create_extension`, `update_extension`, `create_extension_exchange`, and `update_extension_exchange` for extensions, which Terminus rebuilds into screens on a schedule from fetched or supplied data;
 - `delete_screen`, `delete_playlist`, `delete_extension`, and `delete_extension_exchange`, which cannot be undone.
 
@@ -119,7 +119,7 @@ To verify against a configured Terminus instance:
 vp run verify:live
 ```
 
-The live check calls every action in process against the Terminus in `TERMINUS_URL`, `TERMINUS_LOGIN` and `TERMINUS_PASSWORD`. It creates a temporary screen, playlist, and unscheduled extension, with an exchange that fetches the Terminus health check, and assigns the device's existing playlist back to itself. It deletes the temporary objects with the delete tools, or directly if the run fails first. Set `TERMINUS_DEVICE_ID` when Terminus has more than one device.
+The live check calls every action in process against the Terminus in `TERMINUS_URL`, `TERMINUS_LOGIN` and `TERMINUS_PASSWORD`. It creates a temporary screen, playlist, and unscheduled extension, with an exchange that fetches the Terminus health check, and assigns the device's existing playlist back to itself. It changes the device's refresh rate and sleep window and puts back their values when it ends, even when the run fails. It deletes the temporary objects with the delete tools, or directly if the run fails first. Set `TERMINUS_DEVICE_ID` when Terminus has more than one device.
 
 ## License
 

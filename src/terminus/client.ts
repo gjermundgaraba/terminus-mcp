@@ -32,6 +32,7 @@ import {
 import type {
   Assignment,
   DisplayQuery,
+  DisplaySettings,
   ExchangeInput,
   ExchangeRef,
   ExchangeUpdate,
@@ -581,6 +582,47 @@ const make = Effect.gen(function* () {
     return { device: data };
   });
 
+  // Terminus refuses an empty device patch, and a sleep start without its stop.
+  // https://github.com/usetrmnl/terminus/blob/0.79.0/app/contracts/devices/patch.rb#L10-L14
+  const updateDisplaySettings = Effect.fn("Terminus.updateDisplaySettings")(
+    function* ({
+      device_id: deviceId,
+      label,
+      refresh_rate,
+      sleep,
+    }: DisplaySettings) {
+      if (
+        label === undefined &&
+        refresh_rate === undefined &&
+        sleep === undefined
+      ) {
+        return yield* fail(
+          "Give at least one of label, refresh_rate or sleep."
+        );
+      }
+
+      const { data } = yield* api(
+        "PATCH",
+        `api/devices/${deviceId}`,
+        OneOf(SafeDevice),
+        {
+          device: {
+            label,
+            refresh_rate,
+            ...(sleep === undefined
+              ? {}
+              : {
+                  sleep_start_at: sleep?.start_at ?? null,
+                  sleep_stop_at: sleep?.stop_at ?? null,
+                }),
+          },
+        }
+      );
+
+      return { device: data };
+    }
+  );
+
   const oneExtension = (
     method: "GET" | "PATCH" | "DELETE",
     id: number,
@@ -714,6 +756,7 @@ const make = Effect.gen(function* () {
     savePlaylist,
     deletePlaylist,
     assignPlaylist,
+    updateDisplaySettings,
     listExtensions,
     getExtension,
     createExtension,
