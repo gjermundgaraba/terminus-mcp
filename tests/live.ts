@@ -60,6 +60,15 @@ const verify = Effect.gen(function* () {
     "The live device needs an existing playlist for a no-op assignment test"
   );
 
+  const { latest, update_available } = context.firmware;
+
+  assert.equal(
+    update_available,
+    latest === null || device.firmware_version === null
+      ? null
+      : latest !== device.firmware_version
+  );
+
   const { label, refresh_rate, sleep_start_at, sleep_stop_at } = device;
 
   yield* Effect.addFinalizer(() =>

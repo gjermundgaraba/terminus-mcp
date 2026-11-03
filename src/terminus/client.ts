@@ -18,6 +18,7 @@ import { AUTHORING_GUIDE_ID } from "../docs.js";
 import { download } from "../http-client.js";
 import {
   Extension,
+  Firmware,
   ListOf,
   Model,
   OneOf,
@@ -354,6 +355,7 @@ const make = Effect.gen(function* () {
 
   const devices = api("GET", "api/devices", ListOf(SafeDevice));
   const models = api("GET", "api/models", ListOf(Model));
+  const firmware = api("GET", "api/firmware", ListOf(Firmware));
 
   const playlists = api("GET", "api/playlists", ListOf(Playlist)).pipe(
     Effect.map(({ data }) => data)
@@ -380,10 +382,14 @@ const make = Effect.gen(function* () {
   const getDisplayContext = Effect.fn("Terminus.getDisplayContext")(function* ({
     device_id: deviceId,
   }: DisplayQuery) {
-    const [{ data: allDevices }, { data: allModels }, allPlaylists] =
-      yield* Effect.all([devices, models, playlists], {
-        concurrency: "unbounded",
-      });
+    const [
+      { data: allDevices },
+      { data: allModels },
+      allPlaylists,
+      { data: allFirmware },
+    ] = yield* Effect.all([devices, models, playlists, firmware], {
+      concurrency: "unbounded",
+    });
 
     const device =
       deviceId === undefined
@@ -404,6 +410,12 @@ const make = Effect.gen(function* () {
       );
     }
 
+    const latest =
+      allFirmware.find(({ model_ids }) => model_ids.includes(model.id))
+        ?.version ?? null;
+
+    const installed = device.firmware_version;
+
     return {
       context: {
         device,
@@ -412,6 +424,11 @@ const make = Effect.gen(function* () {
           allPlaylists.find(
             (candidate) => candidate.id === device.playlist_id
           ) ?? null,
+        firmware: {
+          latest,
+          update_available:
+            latest === null || installed === null ? null : latest !== installed,
+        },
         framework: frameworkContext(model),
       },
     };

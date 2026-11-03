@@ -158,6 +158,27 @@ export const model = {
   updated_at: "2026-01-01T00:00:00Z",
 };
 
+export const firmware = {
+  id: 2,
+  version: "1.7.1",
+  created_at: "2026-10-01T00:00:00Z",
+  updated_at: "2026-10-01T00:00:00Z",
+  file_name: "1.7.1.bin",
+  mime_type: "application/octet-stream",
+  size: 1_048_576,
+  uri: "/uploads/1.7.1.bin",
+  model_ids: [1],
+};
+
+export const olderFirmware = {
+  ...firmware,
+  id: 1,
+  version: "1.6.0",
+  file_name: "1.6.0.bin",
+  uri: "/uploads/1.6.0.bin",
+  model_ids: [1, 2],
+};
+
 export const screen = {
   id: 10,
   model_id: 1,
@@ -201,6 +222,7 @@ export const device = {
   mac_address: "e0:72:a1:2f:bc:fc",
   api_key: "must-never-leave-client",
   firmware_version: "1.6.0",
+  firmware_update: true,
   wifi_band: 2.4,
   wifi_signal: -52,
   battery_charge: 87,
@@ -287,6 +309,10 @@ export const terminus =
 
         case "/api/models": {
           return json({ data: [model] });
+        }
+
+        case "/api/firmware": {
+          return json({ data: [firmware, olderFirmware] });
         }
 
         case "/api/screens": {

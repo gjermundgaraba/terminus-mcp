@@ -58,7 +58,8 @@ export const services = Layer.mergeAll(Terminus.layer, ScreenDocs.layer);
 
 export const GetDisplayContext = Action.make("get_display_context", {
   description:
-    "Get a redacted Terminus device, its rendering model, and current playlist. " +
+    "Get a redacted Terminus device, its rendering model, current playlist, and whether " +
+    "newer firmware is available for it. " +
     "Provide device_id when the server has multiple devices.",
   input: DisplayQuery,
   success: { context: DisplayContext },

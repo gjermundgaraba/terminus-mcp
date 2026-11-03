@@ -18,7 +18,7 @@ The server exposes these tools:
 - `list_extensions`, `get_extension`, `create_extension`, `update_extension`, `create_extension_exchange`, and `update_extension_exchange` for extensions, which Terminus rebuilds into screens on a schedule from fetched or supplied data;
 - `delete_screen`, `delete_playlist`, `delete_extension`, and `delete_extension_exchange`, which cannot be undone.
 
-It deliberately does not expose authentication, firmware endpoints, model mutation, device deletion, raw device credentials, exchange header values, or a generic API proxy.
+It deliberately does not expose authentication, firmware uploads or updates, model mutation, device deletion, raw device credentials, exchange header values, or a generic API proxy.
 
 Extension exchanges make the Terminus server fetch URLs an agent chooses, so run Terminus with its outbound network restricted; see [docs/design.md](docs/design.md#extension-exchanges).
 

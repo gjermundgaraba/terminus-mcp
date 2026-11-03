@@ -7,6 +7,7 @@ Supports Terminus `0.79.0`. `0.78.0` still works: the endpoints and fields the t
 ### Changes
 
 - `update_display_settings` changes a device's label, refresh rate, or sleep window, keeping the settings it is not given. `get_display_context` and `assign_playlist` return the device's `sleep_start_at` and `sleep_stop_at`.
+- `get_display_context` returns `firmware`: the newest version Terminus holds for the device's model, and whether it differs from the device's own. The device carries `firmware_update`, which says whether Terminus offers the device that version.
 
 ## 0.6.0
 

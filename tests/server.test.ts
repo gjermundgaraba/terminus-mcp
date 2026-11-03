@@ -143,6 +143,10 @@ it.effect("redacts device credentials and reuses one login", () => {
     assert.notMatch(context, /api_key|mac_address|must-never|e0:72/iu);
     const { context: display } = yield* mcp.get_display_context();
     assert.strictEqual(display.device.label, "Desk");
+    assert.deepStrictEqual(display.firmware, {
+      latest: "1.7.1",
+      update_available: true,
+    });
     assert.deepStrictEqual(display.framework.screen_classes, [
       "screen",
       "screen--md",
@@ -828,6 +832,16 @@ it.effect("accepts zero dimensions and reports redacted device choices", () => {
 
   const pendingModel = { ...model, id: 2, css: null, width: 0, height: 0 };
 
+  const unsyncedDevice = {
+    ...pendingDevice,
+    id: 42,
+    model_id: 3,
+    label: "Unsynced",
+    firmware_version: null,
+  };
+
+  const firmwarelessModel = { ...pendingModel, id: 3 };
+
   return Effect.gen(function* () {
     const client = yield* Terminus;
 
@@ -841,6 +855,19 @@ it.effect("accepts zero dimensions and reports redacted device choices", () => {
 
     const { context } = yield* client.getDisplayContext({ device_id: 41 });
     assert.strictEqual(context.device.width, 0);
+    assert.deepStrictEqual(context.firmware, {
+      latest: "1.6.0",
+      update_available: false,
+    });
+
+    const { context: unsynced } = yield* client.getDisplayContext({
+      device_id: 42,
+    });
+
+    assert.deepStrictEqual(unsynced.firmware, {
+      latest: null,
+      update_available: null,
+    });
     assert.strictEqual(context.model.height, 0);
     assert.deepStrictEqual(context.model.css, { classes: {}, variables: [] });
     assert.deepStrictEqual(context.framework.screen_variables, {});
@@ -849,11 +876,11 @@ it.effect("accepts zero dimensions and reports redacted device choices", () => {
       terminusLayer(
         terminus(({ url }) => {
           if (url.pathname === "/api/devices") {
-            return json({ data: [device, pendingDevice] });
+            return json({ data: [device, pendingDevice, unsyncedDevice] });
           }
 
           if (url.pathname === "/api/models") {
-            return json({ data: [model, pendingModel] });
+            return json({ data: [model, pendingModel, firmwarelessModel] });
           }
 
           return undefined;
@@ -898,6 +925,10 @@ it.effect("refreshes once after Terminus reports an expired JWT", () => {
 
         if (url.pathname === "/api/playlists") {
           return json({ data: [playlist] });
+        }
+
+        if (url.pathname === "/api/firmware") {
+          return json({ data: [] });
         }
 
         return new Response(null, { status: 404 });

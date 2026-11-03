@@ -19,7 +19,7 @@ References:
 
 An agent should be able to:
 
-1. Discover a display's model, dimensions, capabilities, and current playlist.
+1. Discover a display's model, dimensions, capabilities, current playlist, and whether newer firmware is available for it.
 2. Find and read the relevant TRMNL screen-authoring documentation.
 3. Discover existing screens and inspect their rendered images.
 4. Create or replace a screen from complete HTML and CSS.
@@ -39,6 +39,7 @@ The server should be safe to run as a local stdio process or a Streamable HTTP s
 | Screens | List, create, update, and delete | Includes retrieval of the rendered image. |
 | Playlists | List, create, update, and delete | Supports ordered screen membership. |
 | Extensions | List, create, update, and delete | Includes their exchanges, without header values. |
+| Firmware | Read-only | Only the newest version for a device's model, in the display context. |
 
 ## MCP tools
 
@@ -46,7 +47,7 @@ The server should be safe to run as a local stdio process or a Streamable HTTP s
 
 | Tool | Purpose |
 | --- | --- |
-| `get_display_context` | Return a redacted device, its model, and its current playlist. |
+| `get_display_context` | Return a redacted device, its model, its current playlist, and the newest firmware for its model. |
 | `search_screen_docs` | Find the local authoring guide and official TRMNL Framework documentation. |
 | `read_screen_doc` | Read a document selected by its server-issued documentation ID. |
 | `list_screens` | Return screen metadata for selection and filtering. |
@@ -110,6 +111,8 @@ Read-only model data remains necessary for screen rendering.
 
 A device's label, refresh rate, and sleep window are the exception: they decide when content shows, which is part of publishing it, and `update_display_settings` changes nothing else. Its image timeout, a firmware download limit, stays excluded.
 
+Firmware is read only to tell whether a newer version exists for a device's model. Uploading firmware and setting a device's `firmware_update` flag stay excluded.
+
 ### Generic API proxy
 
 Do not provide a tool such as `terminus_request(method, path, body)`. It would bypass the curated capability boundary and make every future Terminus endpoint implicitly available to agents.
@@ -168,9 +171,9 @@ Safe device output is limited to fields useful for selection and diagnostics, su
 
 - ID and label;
 - model and playlist IDs;
-- firmware version;
+- firmware version, and whether Terminus offers it updates;
 - battery, charging, Wi-Fi, and synchronization status;
-- display dimensions and refresh rate.
+- display dimensions, refresh rate, and sleep window.
 
 ### Untrusted screen content
 

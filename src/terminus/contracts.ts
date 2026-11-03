@@ -27,6 +27,7 @@ export const SafeDevice = Schema.Struct({
   playlist_id: Schema.NullOr(PositiveInt),
   label: Schema.String,
   firmware_version: NullableString,
+  firmware_update: Schema.Boolean,
   wifi_band: NullableNumber,
   wifi_signal: NullableNumber,
   battery_charge: NullableNumber,
@@ -187,10 +188,31 @@ export const FrameworkContext = Schema.Struct({
   authoring_guide_id: Schema.Literal(AUTHORING_GUIDE_ID),
 });
 
+// Terminus lists firmware newest first.
+// https://github.com/usetrmnl/terminus/blob/0.79.0/app/repositories/firmware.rb#L15
+export const Firmware = Schema.Struct({
+  version: Schema.String,
+  model_ids: Schema.Array(PositiveInt),
+});
+
+const FirmwareStatus = Schema.Struct({
+  latest: NullableString.annotate({
+    description:
+      "The newest firmware version Terminus holds for the device's model; null when it holds none.",
+  }),
+  update_available: Schema.NullOr(Schema.Boolean).annotate({
+    description:
+      "Whether latest differs from the device's firmware_version; null when either is unknown. " +
+      "Terminus offers it to the device at its next request only when the device's " +
+      "firmware_update is true.",
+  }),
+});
+
 export const DisplayContext = Schema.Struct({
   device: SafeDevice,
   model: Model,
   playlist: Schema.NullOr(Playlist),
+  firmware: FirmwareStatus,
   framework: FrameworkContext,
 });
 
