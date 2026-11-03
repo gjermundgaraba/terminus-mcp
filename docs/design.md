@@ -4,7 +4,7 @@
 
 The first release will be a curated content-publishing interface, not a one-to-one proxy for the Terminus API.
 
-It will cover screen creation, playlist management, extensions, safe discovery, and two narrow device mutations: assigning a playlist, and setting when a display refreshes and sleeps. Authentication remains an internal implementation detail.
+It will cover screen creation, playlist management, extensions, safe discovery, and two narrow device mutations: assigning a playlist, and setting when a display refreshes and sleeps. A host may also opt into defining display models. Authentication remains an internal implementation detail.
 
 This design targets Terminus `0.79.0`. Terminus marks its server API as evolving, so compatibility with a release is tested rather than assumed.
 
@@ -26,6 +26,7 @@ An agent should be able to:
 5. Create or replace an ordered playlist and assign it to a device.
 6. Create extensions that Terminus rebuilds into screens on a schedule, from static data, fetched data, or data the agent supplies.
 7. Set how often a display asks for its next screen, and when it sleeps.
+8. When the host allows it, define a model for hardware Terminus does not know.
 
 The server should be safe to run as a local stdio process or a Streamable HTTP service on an access-controlled network, with Terminus credentials provided by its runtime.
 
@@ -34,7 +35,7 @@ The server should be safe to run as a local stdio process or a Streamable HTTP s
 | Terminus API | Initial coverage | Notes |
 | --- | --- | --- |
 | Authentication | Internal | Login and JWT refresh are never MCP tools. |
-| Models | Read-only | Supplies rendering dimensions and display capabilities. |
+| Models | Read; create and update when the host opts in | Supplies rendering dimensions and display capabilities. Only models created in Terminus can be changed. |
 | Devices | Restricted read and write | Redacted status, `playlist_id` assignment, and label, refresh rate, and sleep window only. |
 | Screens | List, create, update, and delete | Includes retrieval of the rendered image. |
 | Playlists | List, create, update, and delete | Supports ordered screen membership. |
@@ -75,6 +76,13 @@ The server should be safe to run as a local stdio process or a Streamable HTTP s
 | `create_extension_exchange` | Add URLs for Terminus to fetch an extension's data from. |
 | `update_extension_exchange` | Change an exchange's given fields. |
 
+### Models, when `TERMINUS_MODEL_TOOLS` is true
+
+| Tool | Purpose |
+| --- | --- |
+| `create_model` | Define a model's size, bit depth, colors, image type, rotation, offsets, palette, and Framework CSS. |
+| `update_model` | Change the given fields of a model of kind `terminus`. |
+
 ### Deletion
 
 | Tool | Purpose |
@@ -100,7 +108,7 @@ Those endpoints exist for device firmware. Exposing them would let an agent impe
 
 ### Administrative mutations
 
-Do not expose firmware, model, or full device CRUD. These operations can:
+Do not expose firmware, model deletion, or full device CRUD. These operations can:
 
 - install untrusted firmware or make a device unavailable;
 - alter image conversion for every screen associated with a model;
@@ -108,6 +116,8 @@ Do not expose firmware, model, or full device CRUD. These operations can:
 - delete a physical device's server-side registration.
 
 Read-only model data remains necessary for screen rendering.
+
+Creating and changing models is the opt-in exception, for hardware Terminus does not know. A model sets image conversion for every screen of every device that uses it, so the server lists `create_model` and `update_model` only when its host sets `TERMINUS_MODEL_TOOLS`. `update_model` refuses a model whose kind is not `terminus`: Terminus's model sync from TRMNL upserts every model TRMNL lists by name, so a change to one of them would not last, and a created model whose name TRMNL uses is overwritten the same way. Deleting a model also deletes every device and screen that uses it, so there is no `delete_model`.
 
 A device's label, refresh rate, and sleep window are the exception: they decide when content shows, which is part of publishing it, and `update_display_settings` changes nothing else. Its image timeout, a firmware download limit, stays excluded.
 
@@ -123,7 +133,7 @@ Do not scrape the Terminus UI or access its database to automate Designs, palett
 
 ## Deletion
 
-Every content resource the server can create can also be deleted: screens, playlists, extensions, and exchanges. Device, model, and firmware deletion stay excluded as administrative mutations.
+Every content resource the server can create can also be deleted: screens, playlists, extensions, and exchanges. Device, model, and firmware deletion stay excluded as administrative mutations, though the opt-in model tools can create a model.
 
 Each deletion is its own tool, taking one ID and marked destructive. Deletion must never be hidden inside an upsert or generic mutation tool, and a tool must not delete more than the one resource it names; Terminus's own cascades are the only side effects:
 

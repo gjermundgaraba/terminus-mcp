@@ -434,6 +434,64 @@ export const ExchangeUpdate = Schema.Struct({
   ...Struct.mapPick(exchangeInputFields, ["template"], Schema.optionalKey),
 });
 
+const modelFields = {
+  name: ShortText.annotate({
+    description:
+      "Unique. Terminus's model sync from TRMNL matches models by name, so a name TRMNL " +
+      "also uses is overwritten at the next sync.",
+  }),
+  label: ShortText,
+  description: Schema.optionalKey(
+    Schema.NullOr(Schema.String.check(Schema.isMaxLength(10_000)))
+  ),
+  mime_type: Schema.Literals(["image/png", "image/webp", "image/bmp"]),
+  colors: PositiveInt,
+  bit_depth: PositiveInt,
+  width: PositiveInt,
+  height: PositiveInt,
+  rotation: Schema.optionalKey(
+    Schema.Int.annotate({
+      description: "Degrees Terminus rotates each rendered image by.",
+    })
+  ),
+  offset_x: Schema.optionalKey(Schema.Int),
+  offset_y: Schema.optionalKey(Schema.Int),
+  scale_factor: Schema.optionalKey(
+    Schema.Finite.check(Schema.isGreaterThan(0))
+  ),
+  default_palette_id: Schema.optionalKey(
+    Schema.NullOr(PositiveInt).annotate({
+      description:
+        "Copy it from a model with the same panel; there is no palette tool.",
+    })
+  ),
+  css: Schema.optionalKey(
+    Schema.NullOr(
+      Schema.Struct({
+        classes: Schema.Record(Schema.String, Schema.String),
+        variables: Schema.Array(Schema.Tuple([Schema.String, Schema.String])),
+      })
+    ).annotate({
+      description:
+        "Framework screen classes and CSS variables, in the shape of model.css from " +
+        "get_display_context.",
+    })
+  ),
+};
+
+export const ModelInput = Schema.Struct(modelFields);
+
+export const ModelRef = Schema.Struct({ model_id: PositiveInt });
+
+export const ModelUpdate = Schema.Struct({
+  ...ModelRef.fields,
+  ...Struct.mapPick(
+    modelFields,
+    ["name", "label", "mime_type", "colors", "bit_depth", "width", "height"],
+    Schema.optionalKey
+  ),
+});
+
 export const ListOf = <S extends Schema.Top>(item: S) =>
   Schema.Struct({ data: Schema.Array(item) });
 
@@ -446,6 +504,10 @@ export const OneOrMissing = <S extends Schema.Top>(item: S) =>
 export type Model = typeof Model.Type;
 
 export type Playlist = typeof Playlist.Type;
+
+export type ModelInput = typeof ModelInput.Type;
+
+export type ModelUpdate = typeof ModelUpdate.Type;
 
 export type SafeDevice = typeof SafeDevice.Type;
 

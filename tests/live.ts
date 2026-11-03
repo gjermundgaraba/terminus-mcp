@@ -6,7 +6,13 @@ import { Config, Effect, flow, Layer, Option, Redacted } from "effect";
 import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
 
 import { noRedirectHttpClientLayer } from "../src/http-client.js";
-import { Actions, actions, services } from "../src/server.js";
+import {
+  Actions,
+  actions,
+  ModelActions,
+  modelActions,
+  services,
+} from "../src/server.js";
 import { terminusConfig } from "../src/terminus/client.js";
 import { Tokens } from "../src/terminus/contracts.js";
 import type { FrameworkContext } from "../src/terminus/contracts.js";
@@ -15,6 +21,7 @@ interface Created {
   screen?: number;
   playlist?: number;
   extension?: number;
+  model?: number;
 }
 
 const created: Created = {};
@@ -248,8 +255,40 @@ const verify = Effect.gen(function* () {
     assert.match((yield* missing).message, /was not found/u);
   }
 
+  const models = yield* Action.client(modelActions);
+
+  const { model: custom } = yield* models.create_model({
+    name,
+    label: "Terminus MCP verification",
+    mime_type: "image/png",
+    colors: 2,
+    bit_depth: 1,
+    width: model.width,
+    height: model.height,
+  });
+
+  created.model = custom.id;
+  assert.equal(custom.kind, "terminus");
+
+  const { model: rotated } = yield* models.update_model({
+    model_id: custom.id,
+    rotation: 90,
+    label: "Terminus MCP verification updated",
+  });
+
+  assert.equal(rotated.rotation, 90);
+  assert.equal(rotated.width, model.width);
+
+  if (model.kind !== "terminus") {
+    const synced = yield* Effect.flip(
+      models.update_model({ model_id: model.id, rotation: model.rotation })
+    );
+
+    assert.match(synced.message, /comes from TRMNL/u);
+  }
+
   yield* Effect.logInfo(
-    `Live verification passed for all ${Actions.length} actions.`
+    `Live verification passed for all ${Actions.length + ModelActions.length} actions.`
   );
 });
 
@@ -282,6 +321,7 @@ const deleteCreatedWithoutActions = Effect.gen(function* () {
   // https://github.com/usetrmnl/terminus/blob/0.79.0/config/db/migrate/20260406095627_add_extension_exchange.rb#L10
   for (const [collection, id] of [
     ["api/extensions", created.extension],
+    ["api/models", created.model],
     ["api/playlists", created.playlist],
     ["api/screens", created.screen],
   ] as const) {

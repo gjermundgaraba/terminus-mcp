@@ -8,6 +8,7 @@ Supports Terminus `0.79.0`. `0.78.0` still works: the endpoints and fields the t
 
 - `update_display_settings` changes a device's label, refresh rate, or sleep window, keeping the settings it is not given. `get_display_context` and `assign_playlist` return the device's `sleep_start_at` and `sleep_stop_at`.
 - `get_display_context` returns `firmware`: the newest version Terminus holds for the device's model, and whether it differs from the device's own. The device carries `firmware_update`, which says whether Terminus offers the device that version.
+- `create_model` and `update_model` define and change display models for hardware Terminus does not know. They are served only when `TERMINUS_MODEL_TOOLS` is `true`. `update_model` refuses models that come from TRMNL, since Terminus's model sync would overwrite the change.
 
 ## 0.6.0
 

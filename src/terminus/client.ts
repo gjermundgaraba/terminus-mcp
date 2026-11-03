@@ -41,6 +41,8 @@ import type {
   ExtensionRef,
   ExtensionUpdate,
   FrameworkContext,
+  ModelInput,
+  ModelUpdate,
   PlaylistInput,
   PlaylistRef,
   ScreenFilters,
@@ -640,6 +642,42 @@ const make = Effect.gen(function* () {
     }
   );
 
+  const createModel = Effect.fn("Terminus.createModel")(function* (
+    model: ModelInput
+  ) {
+    const { data } = yield* api("POST", "api/models", OneOf(Model), { model });
+
+    return { model: data };
+  });
+
+  // Terminus's model sync from TRMNL upserts every model TRMNL lists by name, so only a model
+  // created in Terminus, of kind terminus, keeps a change.
+  // https://github.com/usetrmnl/terminus/blob/0.79.0/app/aspects/models/synchronizer.rb#L49-L56
+  const updateModel = Effect.fn("Terminus.updateModel")(function* ({
+    model_id: modelId,
+    ...changes
+  }: ModelUpdate) {
+    if (Object.keys(changes).length === 0) {
+      return yield* fail("Give at least one field to change.");
+    }
+
+    const path = `api/models/${modelId}`;
+    const current = yield* one("GET", path, Model, `Model ${modelId}`);
+
+    if (current.kind !== "terminus") {
+      return yield* fail(
+        `Model ${modelId} comes from TRMNL (kind ${current.kind}), and Terminus's next ` +
+          "model sync would overwrite a change. Create a model instead."
+      );
+    }
+
+    const { data } = yield* api("PATCH", path, OneOf(Model), {
+      model: changes,
+    });
+
+    return { model: data };
+  });
+
   const oneExtension = (
     method: "GET" | "PATCH" | "DELETE",
     id: number,
@@ -774,6 +812,8 @@ const make = Effect.gen(function* () {
     deletePlaylist,
     assignPlaylist,
     updateDisplaySettings,
+    createModel,
+    updateModel,
     listExtensions,
     getExtension,
     createExtension,

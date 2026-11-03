@@ -1,6 +1,6 @@
 import * as Action from "@gjermundgaraba/effect-actions/Action";
 import type * as ActionMcp from "@gjermundgaraba/effect-actions/ActionMcp";
-import { Duration, Effect, Layer, Schema } from "effect";
+import { Config, Duration, Effect, Layer, Schema } from "effect";
 
 import packageJson from "../package.json" with { type: "json" };
 import {
@@ -24,6 +24,9 @@ import {
   ExtensionInput,
   ExtensionRef,
   ExtensionUpdate,
+  Model,
+  ModelInput,
+  ModelUpdate,
   Playlist,
   PlaylistInput,
   PlaylistRef,
@@ -371,6 +374,41 @@ export const DeleteExtensionExchange = Action.make(
   }
 );
 
+export const CreateModel = Action.make("create_model", {
+  description:
+    "Define a display model for hardware Terminus does not know, such as a home-built " +
+    "e-paper panel. Screens and extensions for it render at its size, bit depth, and " +
+    "colors. Its name must be unique and not one TRMNL uses.",
+  input: ModelInput,
+  success: { model: Model },
+  error: TerminusError,
+  readOnly: false,
+  caller: Action.Anyone,
+  mcp: {
+    title: "Create model",
+    destructiveHint: false,
+    idempotentHint: false,
+  },
+});
+
+export const UpdateModel = Action.make("update_model", {
+  description:
+    "Change the given fields of a model created in Terminus, of kind terminus; omitted " +
+    "fields are kept. Models from TRMNL are refused, since Terminus's model sync would " +
+    "overwrite the change. Every screen rendered for the model afterwards uses the new " +
+    "settings, on every device of that model; screens rendered before keep their images.",
+  input: ModelUpdate,
+  success: { model: Model },
+  error: TerminusError,
+  readOnly: false,
+  caller: Action.Anyone,
+  mcp: {
+    title: "Update model",
+    destructiveHint: true,
+    idempotentHint: true,
+  },
+});
+
 export const Actions = [
   GetDisplayContext,
   SearchScreenDocs,
@@ -425,4 +463,27 @@ export const actions = Action.implement(
       delete_extension_exchange: terminus.deleteExchange,
     };
   })
+);
+
+export const ModelActions = [CreateModel, UpdateModel] as const;
+
+export const modelActions = Action.implement(
+  ModelActions,
+  Effect.gen(function* () {
+    const terminus = yield* Terminus;
+
+    return {
+      create_model: terminus.createModel,
+      update_model: terminus.updateModel,
+    };
+  })
+);
+
+/**
+ * The implementations to serve. Model tools change rendering for every device of a model, so
+ * they are served only when `TERMINUS_MODEL_TOOLS` is true.
+ */
+export const served = Config.Boolean("TERMINUS_MODEL_TOOLS").pipe(
+  Config.withDefault(false),
+  Config.map((modelTools) => (modelTools ? [actions, modelActions] : [actions]))
 );

@@ -16,9 +16,10 @@ The server exposes these tools:
 - `save_playlist` for complete ordered playlist replacement;
 - `assign_playlist` and `update_display_settings` for the only device changes allowed: a device's playlist, label, refresh rate, and sleep window;
 - `list_extensions`, `get_extension`, `create_extension`, `update_extension`, `create_extension_exchange`, and `update_extension_exchange` for extensions, which Terminus rebuilds into screens on a schedule from fetched or supplied data;
-- `delete_screen`, `delete_playlist`, `delete_extension`, and `delete_extension_exchange`, which cannot be undone.
+- `delete_screen`, `delete_playlist`, `delete_extension`, and `delete_extension_exchange`, which cannot be undone;
+- `create_model` and `update_model`, for hardware Terminus does not know, only when `TERMINUS_MODEL_TOOLS` is true.
 
-It deliberately does not expose authentication, firmware uploads or updates, model mutation, device deletion, raw device credentials, exchange header values, or a generic API proxy.
+It deliberately does not expose authentication, firmware uploads or updates, model deletion, changes to TRMNL's own models, device deletion, raw device credentials, exchange header values, or a generic API proxy.
 
 Extension exchanges make the Terminus server fetch URLs an agent chooses, so run Terminus with its outbound network restricted; see [docs/design.md](docs/design.md#extension-exchanges).
 
@@ -97,6 +98,8 @@ The MCP host must provide:
 - `TERMINUS_LOGIN`: Login email for the Terminus account.
 - `TERMINUS_PASSWORD`: Login password for the Terminus account.
 
+It may also set `TERMINUS_MODEL_TOOLS` to `true` to serve `create_model` and `update_model`. They are off by default because a model sets how every screen renders on every device that uses it.
+
 `TERMINUS_URL` must use HTTP or HTTPS and must not contain credentials.
 
 The HTTP entrypoint additionally accepts:
@@ -119,7 +122,7 @@ To verify against a configured Terminus instance:
 vp run verify:live
 ```
 
-The live check calls every action in process against the Terminus in `TERMINUS_URL`, `TERMINUS_LOGIN` and `TERMINUS_PASSWORD`. It creates a temporary screen, playlist, and unscheduled extension, with an exchange that fetches the Terminus health check, and assigns the device's existing playlist back to itself. It changes the device's refresh rate and sleep window and puts back their values when it ends, even when the run fails. It deletes the temporary objects with the delete tools, or directly if the run fails first. Set `TERMINUS_DEVICE_ID` when Terminus has more than one device.
+The live check calls every action in process against the Terminus in `TERMINUS_URL`, `TERMINUS_LOGIN` and `TERMINUS_PASSWORD`. It creates a temporary screen, playlist, and unscheduled extension, with an exchange that fetches the Terminus health check, and assigns the device's existing playlist back to itself. It changes the device's refresh rate and sleep window and puts back their values when it ends, even when the run fails. It also creates and updates a temporary model, checks that `update_model` refuses the device's model when TRMNL provides it, and deletes the temporary model directly, since no tool deletes models. It deletes the temporary objects with the delete tools, or directly if the run fails first. Set `TERMINUS_DEVICE_ID` when Terminus has more than one device.
 
 ## License
 

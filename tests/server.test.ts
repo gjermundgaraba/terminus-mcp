@@ -4,7 +4,7 @@ import { Effect, Layer, Schema } from "effect";
 import { McpSchema } from "effect/ai";
 
 import { ScreenDocs } from "../src/docs.js";
-import { Actions } from "../src/server.js";
+import { Actions, ModelActions } from "../src/server.js";
 import { Terminus } from "../src/terminus/client.js";
 import {
   configured,
@@ -132,6 +132,117 @@ it.effect("lists the curated tools with their hints", () =>
     }
   }).pipe(Effect.provide(serve(noTerminus)))
 );
+
+it.effect("serves the model tools only when the host opts in", () =>
+  Effect.gen(function* () {
+    const {
+      result: { tools },
+    } = yield* rpc("tools/list", McpSchema.ListToolsResult);
+
+    const names = tools.map(({ name }) => name);
+    assert.includeMembers(names, [
+      "create_model",
+      "update_model",
+      "list_screens",
+    ]);
+    assert.strictEqual(names.length, Actions.length + ModelActions.length);
+
+    const hints = (name: string) =>
+      tools.find((candidate) => candidate.name === name)?.annotations;
+
+    assert.strictEqual(hints("create_model")?.destructiveHint, false);
+    assert.strictEqual(hints("update_model")?.destructiveHint, true);
+  }).pipe(Effect.provide(serve(noTerminus, { TERMINUS_MODEL_TOOLS: "true" })))
+);
+
+it.effect("creates models and changes only Terminus's own", () => {
+  const panel = { ...model, id: 5, kind: "terminus", name: "panel" };
+  const sent: unknown[] = [];
+
+  return Effect.gen(function* () {
+    const mcp = yield* ActionMcp.client(ModelActions);
+
+    const created = yield* mcp.create_model({
+      name: "panel",
+      label: "Panel",
+      mime_type: "image/png",
+      colors: 2,
+      bit_depth: 1,
+      width: 800,
+      height: 480,
+    });
+
+    assert.strictEqual(created.model.id, 5);
+    yield* mcp.update_model({ model_id: 5, rotation: 90 });
+
+    const synced = yield* Effect.flip(
+      mcp.update_model({ model_id: 1, rotation: 90 })
+    );
+
+    assert.match(synced.message, /Model 1 comes from TRMNL \(kind display\)/u);
+
+    const missing = yield* Effect.flip(
+      mcp.update_model({ model_id: 9, rotation: 90 })
+    );
+
+    assert.match(missing.message, /Model 9 was not found/u);
+
+    const empty = yield* Effect.flip(mcp.update_model({ model_id: 5 }));
+    assert.match(empty.message, /at least one field/u);
+
+    assert.deepStrictEqual(sent, [
+      {
+        model: {
+          name: "panel",
+          label: "Panel",
+          mime_type: "image/png",
+          colors: 2,
+          bit_depth: 1,
+          width: 800,
+          height: 480,
+        },
+      },
+      { model: { rotation: 90 } },
+    ]);
+  }).pipe(
+    Effect.provide(
+      serve(
+        terminus(({ method, url, body }) => {
+          if (method === "POST" && url.pathname === "/api/models") {
+            sent.push(body);
+
+            return json({ data: panel });
+          }
+
+          if (method === "PATCH" && url.pathname === "/api/models/5") {
+            sent.push(body);
+
+            return json({ data: { ...panel, rotation: 90 } });
+          }
+
+          if (method === "GET" && url.pathname === "/api/models/5") {
+            return json({ data: panel });
+          }
+
+          if (method === "GET" && url.pathname === "/api/models/1") {
+            return json({ data: model });
+          }
+
+          if (method === "GET" && url.pathname === "/api/models/9") {
+            return json({
+              type: "about:blank",
+              title: "Not Found",
+              status: 404,
+            });
+          }
+
+          return undefined;
+        }),
+        { TERMINUS_MODEL_TOOLS: "true" }
+      )
+    )
+  );
+});
 
 it.effect("redacts device credentials and reuses one login", () => {
   let logins = 0;

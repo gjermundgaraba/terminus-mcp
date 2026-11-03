@@ -15,7 +15,7 @@ import {
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 
 import { noRedirectHttpClientLayer } from "./http-client.js";
-import { actions, server, services } from "./server.js";
+import { served, server, services } from "./server.js";
 
 const Origin = Schema.String.pipe(
   Schema.decodeTo(
@@ -40,7 +40,7 @@ export const routes = Layer.unwrap(
     ).pipe(Config.withDefault([]));
 
     return Layer.mergeAll(
-      ActionMcp.layerHttp(actions, { ...server, allowedOrigins }),
+      ActionMcp.layerHttp(yield* served, { ...server, allowedOrigins }),
       HttpRouter.add(
         "GET",
         "/healthz",
