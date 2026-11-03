@@ -111,15 +111,15 @@ End by asking which candidates to implement. If nothing new is worth adding, say
 
 ## 5. Implement what the user picks
 
-For the new features the user chooses, follow the most recent feature commit, the `Support Terminus X, ...` subject that names features after the version: `git log --oneline --grep='^Support Terminus .*, '`. A new capability touches:
+Add each feature the user chooses as its own commit, after the compatibility bump. For examples, read the feature commits that follow earlier bumps: `git log --oneline --grep='^Support Terminus'` lists the bumps, and the commits after each one added what that release offered. A new capability touches:
 
 - **`src/terminus/contracts.ts`**: schemas and tool descriptions.
 - **`src/terminus/client.ts`**: the Terminus call.
-- **`src/server.ts`**: the tool.
+- **`src/server.ts`**: the tool. A tool only some hosts should get goes in its own implementation, served through `served` in `src/server.ts`, behind a `TERMINUS_*` flag documented under Configuration in the README.
 - **`tests/fake.ts` and `tests/server.test.ts`**: the fake Terminus and the tests.
-- **`tests/live.ts`**: exercise it against a real Terminus, and clean up anything it creates.
+- **`tests/live.ts`**: exercise it against a real Terminus, and clean up anything it creates. If it changes something that already exists, such as a device setting, restore the original in a finalizer so a failed run doesn't leave the real display changed.
 - **`README.md`**: the tool list.
-- **`docs/design.md`**: the API coverage table, the tool tables and the constraints.
+- **`docs/design.md`**: the Decision, Goals, API coverage table, tool tables, explicit exclusions and constraints. A feature that crosses an exclusion needs the exclusion rewritten, with the reason for the exception.
 - **`docs/screen-authoring.md`**: only if the feature affects how screens are written.
 - **`CHANGELOG.md`**
 
