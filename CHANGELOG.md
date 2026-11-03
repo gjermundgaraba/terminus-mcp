@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.7.0
 
-Supports Terminus `0.79.0`. `0.78.0` still works: the endpoints and fields the tools use are unchanged, and a missing playlist is reported as not found whether Terminus answers with HTTP 404, as `0.79.0` does, or with empty `data`.
+Built on Effect `4.1.2` and `@gjermundgaraba/effect-actions` `0.29.0`. Supports Terminus `0.79.0`. `0.78.0` still works: the endpoints and fields the tools use are unchanged, and a missing playlist is reported as not found whether Terminus answers with HTTP 404, as `0.79.0` does, or with empty `data`.
 
 ### Changes
 
