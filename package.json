@@ -46,7 +46,6 @@
     "@effect/tsgo": "catalog:",
     "@effect/vitest": "catalog:",
     "@types/node": "26.6.6",
-    "oxfmt": "catalog:",
     "typescript": "7.0.2",
     "ultracite": "catalog:",
     "vite": "catalog:",
