@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changes
+
+- `update_display_settings`, `update_extension`, `update_extension_exchange` and `update_model` refuse a call that changes nothing before it reaches Terminus, and their input schemas say so with `minProperties`. `update_extension` used to accept such a call and change nothing, and `update_extension_exchange` passed it to Terminus, which refused it.
+
 ## 0.7.0
 
 Built on Effect `4.1.2` and `@gjermundgaraba/effect-actions` `0.29.0`. Supports Terminus `0.79.0`. `0.78.0` still works: the endpoints and fields the tools use are unchanged, and a missing playlist is reported as not found whether Terminus answers with HTTP 404, as `0.79.0` does, or with empty `data`.

@@ -17,9 +17,7 @@ const NullableNumber = Schema.NullOr(Schema.Finite);
 const ModelCss = Schema.Struct({
   classes: Schema.Record(Schema.String, Schema.String),
   variables: Schema.Array(Schema.Tuple([Schema.String, Schema.String])),
-}).pipe(
-  Schema.catchDecoding(() => Effect.succeedSome({ classes: {}, variables: [] }))
-);
+});
 
 export const SafeDevice = Schema.Struct({
   id: PositiveInt,
@@ -56,7 +54,11 @@ export const Model = Schema.Struct({
   offset_x: Schema.Int,
   offset_y: Schema.Int,
   scale_factor: Schema.Finite.check(Schema.isGreaterThan(0)),
-  css: ModelCss,
+  css: ModelCss.pipe(
+    Schema.catchDecoding(() =>
+      Effect.succeedSome({ classes: {}, variables: [] })
+    )
+  ),
   width: NonNegativeInt,
   height: NonNegativeInt,
   created_at: Schema.String,
@@ -239,6 +241,27 @@ const LongText = Schema.String.check(
   Schema.isMaxLength(1_000_000)
 );
 
+const Description = Schema.optionalKey(
+  Schema.NullOr(Schema.String.check(Schema.isMaxLength(10_000)))
+);
+
+// Terminus refuses a patch that changes nothing.
+// https://github.com/usetrmnl/terminus/blob/0.79.0/app/contracts/devices/patch.rb#L10
+// https://github.com/usetrmnl/terminus/blob/0.79.0/app/actions/api/models/patch.rb#L17
+// https://github.com/usetrmnl/terminus/blob/0.79.0/app/actions/api/extensions/exchanges/patch.rb#L18
+const changes = <
+  const Ref extends Schema.Struct.Fields,
+  const Fields extends Schema.Struct.Fields,
+>(
+  ref: Ref,
+  fields: Fields
+) =>
+  Schema.Struct({ ...ref, ...fields }).check(
+    Schema.isMinProperties(Object.keys(ref).length + 1, {
+      message: "Give at least one field to change.",
+    })
+  );
+
 const Mode = Schema.optionalKey(
   Schema.Literals(["text", "dither"]).annotate({
     description:
@@ -263,27 +286,29 @@ const ClockTime = Schema.String.check(
   Schema.isPattern(/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/u)
 ).annotate({ description: "HH:MM or HH:MM:SS." });
 
-export const DisplaySettings = Schema.Struct({
-  device_id: PositiveInt,
-  label: Schema.optionalKey(ShortText),
-  refresh_rate: Schema.optionalKey(
-    PositiveInt.annotate({
-      description:
-        "Seconds between the display's requests for its next screen. Shorter shows new " +
-        "content sooner and drains the battery faster.",
-    })
-  ),
-  sleep: Schema.optionalKey(
-    Schema.NullOr(
-      Schema.Struct({ start_at: ClockTime, stop_at: ClockTime })
-    ).annotate({
-      description:
-        "A daily window, in the Terminus server's local time, when the display shows " +
-        "Terminus's sleep screen and its playlist does not move; it may cross midnight. " +
-        "null removes it.",
-    })
-  ),
-});
+export const DisplaySettings = changes(
+  { device_id: PositiveInt },
+  {
+    label: Schema.optionalKey(ShortText),
+    refresh_rate: Schema.optionalKey(
+      PositiveInt.annotate({
+        description:
+          "Seconds between the display's requests for its next screen. Shorter shows new " +
+          "content sooner and drains the battery faster.",
+      })
+    ),
+    sleep: Schema.optionalKey(
+      Schema.NullOr(
+        Schema.Struct({ start_at: ClockTime, stop_at: ClockTime })
+      ).annotate({
+        description:
+          "A daily window, in the Terminus server's local time, when the display shows " +
+          "Terminus's sleep screen and its playlist does not move; it may cross midnight. " +
+          "null removes it.",
+      })
+    ),
+  }
+);
 
 export const ScreenFilters = Schema.Struct({
   model_id: Schema.optionalKey(PositiveInt),
@@ -354,9 +379,7 @@ const Weekday = Schema.Literals([
 const extensionFields = {
   name: ShortText,
   label: ShortText,
-  description: Schema.optionalKey(
-    Schema.NullOr(Schema.String.check(Schema.isMaxLength(10_000)))
-  ),
+  description: Description,
   kind: ExtensionKind,
   mode: Mode,
   template: LongText.annotate({
@@ -395,14 +418,14 @@ export const ExtensionInput = Schema.Struct(extensionFields);
 
 export const ExtensionRef = Schema.Struct({ extension_id: PositiveInt });
 
-export const ExtensionUpdate = Schema.Struct({
-  ...ExtensionRef.fields,
-  ...Struct.mapPick(
+export const ExtensionUpdate = changes(
+  ExtensionRef.fields,
+  Struct.mapPick(
     extensionFields,
     ["name", "label", "kind", "template"],
     Schema.optionalKey
-  ),
-});
+  )
+);
 
 const exchangeInputFields = {
   template: LongText.annotate({
@@ -420,19 +443,19 @@ const exchangeInputFields = {
 };
 
 export const ExchangeInput = Schema.Struct({
-  extension_id: PositiveInt,
+  ...ExtensionRef.fields,
   ...exchangeInputFields,
 });
 
 export const ExchangeRef = Schema.Struct({
-  extension_id: PositiveInt,
+  ...ExtensionRef.fields,
   exchange_id: PositiveInt,
 });
 
-export const ExchangeUpdate = Schema.Struct({
-  ...ExchangeRef.fields,
-  ...Struct.mapPick(exchangeInputFields, ["template"], Schema.optionalKey),
-});
+export const ExchangeUpdate = changes(
+  ExchangeRef.fields,
+  Struct.mapPick(exchangeInputFields, ["template"], Schema.optionalKey)
+);
 
 const modelFields = {
   name: ShortText.annotate({
@@ -441,9 +464,7 @@ const modelFields = {
       "also uses is overwritten at the next sync.",
   }),
   label: ShortText,
-  description: Schema.optionalKey(
-    Schema.NullOr(Schema.String.check(Schema.isMaxLength(10_000)))
-  ),
+  description: Description,
   mime_type: Schema.Literals(["image/png", "image/webp", "image/bmp"]),
   colors: PositiveInt,
   bit_depth: PositiveInt,
@@ -466,12 +487,7 @@ const modelFields = {
     })
   ),
   css: Schema.optionalKey(
-    Schema.NullOr(
-      Schema.Struct({
-        classes: Schema.Record(Schema.String, Schema.String),
-        variables: Schema.Array(Schema.Tuple([Schema.String, Schema.String])),
-      })
-    ).annotate({
+    Schema.NullOr(ModelCss).annotate({
       description:
         "Framework screen classes and CSS variables, in the shape of model.css from " +
         "get_display_context.",
@@ -483,23 +499,19 @@ export const ModelInput = Schema.Struct(modelFields);
 
 export const ModelRef = Schema.Struct({ model_id: PositiveInt });
 
-export const ModelUpdate = Schema.Struct({
-  ...ModelRef.fields,
-  ...Struct.mapPick(
+export const ModelUpdate = changes(
+  ModelRef.fields,
+  Struct.mapPick(
     modelFields,
     ["name", "label", "mime_type", "colors", "bit_depth", "width", "height"],
     Schema.optionalKey
-  ),
-});
+  )
+);
 
-export const ListOf = <S extends Schema.Top>(item: S) =>
-  Schema.Struct({ data: Schema.Array(item) });
+export const Data = <S extends Schema.Top>(data: S) => Schema.Struct({ data });
 
-export const OneOf = <S extends Schema.Top>(item: S) =>
-  Schema.Struct({ data: item });
-
-export const OneOrMissing = <S extends Schema.Top>(item: S) =>
-  Schema.Union([OneOf(item), Missing]);
+export const DataOrMissing = <S extends Schema.Top>(data: S) =>
+  Schema.Union([Data(data), Missing]);
 
 export type Model = typeof Model.Type;
 
