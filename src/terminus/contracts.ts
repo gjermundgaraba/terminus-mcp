@@ -81,25 +81,6 @@ export const Screen = Schema.Struct({
   uri: Schema.String,
 });
 
-// How Terminus answers with HTTP 200 for a missing resource: a 404 problem, or, from a playlist
-// delete before 0.79.0, empty data.
-// https://github.com/usetrmnl/terminus/blob/0.79.0/app/actions/api/screens/show.rb#L15-L19
-// https://github.com/usetrmnl/terminus/blob/0.78.0/app/actions/api/playlists/delete.rb#L15-L20
-const MissingAnswer = Schema.Union([
-  Schema.Struct({ status: Schema.Literal(404) }),
-  Schema.Struct({ data: Schema.Record(Schema.String, Schema.Never) }),
-]);
-
-const Missing = MissingAnswer.pipe(
-  Schema.decodeTo(
-    Schema.Null,
-    SchemaTransformation.transform<null, typeof MissingAnswer.Type>({
-      decode: () => null,
-      encode: () => ({ status: 404 }),
-    })
-  )
-);
-
 const PlaylistItem = Schema.Struct({
   id: PositiveInt,
   screen_id: PositiveInt,
@@ -488,11 +469,6 @@ export const ModelUpdate = Schema.Struct({
     Schema.optionalKey
   ),
 });
-
-export const Data = <S extends Schema.Top>(data: S) => Schema.Struct({ data });
-
-export const DataOrMissing = <S extends Schema.Top>(data: S) =>
-  Schema.Union([Data(data), Missing]);
 
 export type Model = typeof Model.Type;
 

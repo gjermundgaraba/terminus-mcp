@@ -17,8 +17,6 @@ import type { HttpClientError } from "effect/http";
 import { AUTHORING_GUIDE_ID } from "../docs.js";
 import { download } from "../http-client.js";
 import {
-  Data,
-  DataOrMissing,
   Extension,
   Firmware,
   Model,
@@ -83,6 +81,30 @@ export const terminusConfig = Config.all({
     Config.map(Redacted.make)
   ),
 });
+
+// How Terminus answers with HTTP 200 for a missing resource: a 404 problem, or, from a playlist
+// delete before 0.79.0, empty data.
+// https://github.com/usetrmnl/terminus/blob/0.79.0/app/actions/api/screens/show.rb#L15-L19
+// https://github.com/usetrmnl/terminus/blob/0.78.0/app/actions/api/playlists/delete.rb#L15-L20
+const MissingAnswer = Schema.Union([
+  Schema.Struct({ status: Schema.Literal(404) }),
+  Schema.Struct({ data: Schema.Record(Schema.String, Schema.Never) }),
+]);
+
+const Missing = MissingAnswer.pipe(
+  Schema.decodeTo(
+    Schema.Null,
+    SchemaTransformation.transform<null, typeof MissingAnswer.Type>({
+      decode: () => null,
+      encode: () => ({ status: 404 }),
+    })
+  )
+);
+
+const Envelope = <S extends Schema.Top>(data: S) => Schema.Struct({ data });
+
+const EnvelopeOrMissing = <S extends Schema.Top>(data: S) =>
+  Schema.Union([Envelope(data), Missing]);
 
 const fail = (message: string) => Effect.fail(new TerminusError({ message }));
 
@@ -327,7 +349,7 @@ const make = Effect.gen(function* () {
     body?: Payload
   ) =>
     respond(method, path, body).pipe(
-      Effect.flatMap(json(Data(item))),
+      Effect.flatMap(json(Envelope(item))),
       asTerminusError("Terminus request failed"),
       Effect.map(({ data }) => data)
     );
@@ -343,7 +365,7 @@ const make = Effect.gen(function* () {
       Effect.flatMap((response) =>
         response.status === 404
           ? Effect.succeed(null)
-          : json(DataOrMissing(item))(response)
+          : json(EnvelopeOrMissing(item))(response)
       ),
       asTerminusError("Terminus request failed"),
       Effect.flatMap((found) =>
