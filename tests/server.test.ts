@@ -100,17 +100,11 @@ it.effect("lists the curated tools with their hints", () =>
 
     const required = (name: string) => tool(name).inputSchema.required;
 
-    const minProperties = (name: string) =>
-      tool(name).inputSchema["minProperties"];
-
     assert.deepStrictEqual(required("update_extension"), ["extension_id"]);
     assert.deepStrictEqual(required("update_extension_exchange"), [
       "extension_id",
       "exchange_id",
     ]);
-    assert.strictEqual(minProperties("update_extension"), 2);
-    assert.strictEqual(minProperties("update_extension_exchange"), 3);
-    assert.strictEqual(minProperties("update_display_settings"), 2);
     assert.strictEqual(tool("list_screens").annotations?.readOnlyHint, true);
     const assign = tool("assign_playlist").annotations;
     assert.strictEqual(assign?.readOnlyHint, false);
@@ -192,12 +186,6 @@ it.effect("creates models and changes only Terminus's own", () => {
     );
 
     assert.match(missing.message, /Model 9 was not found/u);
-
-    const { body: empty } = yield* callToolRaw("update_model", {
-      model_id: 5,
-    });
-
-    assert.match(empty, /at least one field to change/u);
 
     assert.deepStrictEqual(sent, [
       {
@@ -323,12 +311,6 @@ it.effect("changes only the display settings it is given", () => {
     assert.notMatch(body, /api_key|mac_address|must-never/iu);
     yield* mcp.update_display_settings({ device_id: 40, label: "Kitchen" });
     yield* mcp.update_display_settings({ device_id: 40, sleep: null });
-
-    const { result: empty } = yield* callToolRaw("update_display_settings", {
-      device_id: 40,
-    });
-
-    assert.strictEqual(empty.isError, true);
 
     const { result: badTime } = yield* callToolRaw("update_display_settings", {
       device_id: 40,

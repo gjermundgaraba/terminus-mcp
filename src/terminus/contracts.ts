@@ -245,23 +245,6 @@ const Description = Schema.optionalKey(
   Schema.NullOr(Schema.String.check(Schema.isMaxLength(10_000)))
 );
 
-// Terminus refuses a patch that changes nothing.
-// https://github.com/usetrmnl/terminus/blob/0.79.0/app/contracts/devices/patch.rb#L10
-// https://github.com/usetrmnl/terminus/blob/0.79.0/app/actions/api/models/patch.rb#L17
-// https://github.com/usetrmnl/terminus/blob/0.79.0/app/actions/api/extensions/exchanges/patch.rb#L18
-const changes = <
-  const Ref extends Schema.Struct.Fields,
-  const Fields extends Schema.Struct.Fields,
->(
-  ref: Ref,
-  fields: Fields
-) =>
-  Schema.Struct({ ...ref, ...fields }).check(
-    Schema.isMinProperties(Object.keys(ref).length + 1, {
-      message: "Give at least one field to change.",
-    })
-  );
-
 const Mode = Schema.optionalKey(
   Schema.Literals(["text", "dither"]).annotate({
     description:
@@ -286,29 +269,27 @@ const ClockTime = Schema.String.check(
   Schema.isPattern(/^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/u)
 ).annotate({ description: "HH:MM or HH:MM:SS." });
 
-export const DisplaySettings = changes(
-  { device_id: PositiveInt },
-  {
-    label: Schema.optionalKey(ShortText),
-    refresh_rate: Schema.optionalKey(
-      PositiveInt.annotate({
-        description:
-          "Seconds between the display's requests for its next screen. Shorter shows new " +
-          "content sooner and drains the battery faster.",
-      })
-    ),
-    sleep: Schema.optionalKey(
-      Schema.NullOr(
-        Schema.Struct({ start_at: ClockTime, stop_at: ClockTime })
-      ).annotate({
-        description:
-          "A daily window, in the Terminus server's local time, when the display shows " +
-          "Terminus's sleep screen and its playlist does not move; it may cross midnight. " +
-          "null removes it.",
-      })
-    ),
-  }
-);
+export const DisplaySettings = Schema.Struct({
+  device_id: PositiveInt,
+  label: Schema.optionalKey(ShortText),
+  refresh_rate: Schema.optionalKey(
+    PositiveInt.annotate({
+      description:
+        "Seconds between the display's requests for its next screen. Shorter shows new " +
+        "content sooner and drains the battery faster.",
+    })
+  ),
+  sleep: Schema.optionalKey(
+    Schema.NullOr(
+      Schema.Struct({ start_at: ClockTime, stop_at: ClockTime })
+    ).annotate({
+      description:
+        "A daily window, in the Terminus server's local time, when the display shows " +
+        "Terminus's sleep screen and its playlist does not move; it may cross midnight. " +
+        "null removes it.",
+    })
+  ),
+});
 
 export const ScreenFilters = Schema.Struct({
   model_id: Schema.optionalKey(PositiveInt),
@@ -418,14 +399,14 @@ export const ExtensionInput = Schema.Struct(extensionFields);
 
 export const ExtensionRef = Schema.Struct({ extension_id: PositiveInt });
 
-export const ExtensionUpdate = changes(
-  ExtensionRef.fields,
-  Struct.mapPick(
+export const ExtensionUpdate = Schema.Struct({
+  ...ExtensionRef.fields,
+  ...Struct.mapPick(
     extensionFields,
     ["name", "label", "kind", "template"],
     Schema.optionalKey
-  )
-);
+  ),
+});
 
 const exchangeInputFields = {
   template: LongText.annotate({
@@ -452,10 +433,10 @@ export const ExchangeRef = Schema.Struct({
   exchange_id: PositiveInt,
 });
 
-export const ExchangeUpdate = changes(
-  ExchangeRef.fields,
-  Struct.mapPick(exchangeInputFields, ["template"], Schema.optionalKey)
-);
+export const ExchangeUpdate = Schema.Struct({
+  ...ExchangeRef.fields,
+  ...Struct.mapPick(exchangeInputFields, ["template"], Schema.optionalKey),
+});
 
 const modelFields = {
   name: ShortText.annotate({
@@ -499,14 +480,14 @@ export const ModelInput = Schema.Struct(modelFields);
 
 export const ModelRef = Schema.Struct({ model_id: PositiveInt });
 
-export const ModelUpdate = changes(
-  ModelRef.fields,
-  Struct.mapPick(
+export const ModelUpdate = Schema.Struct({
+  ...ModelRef.fields,
+  ...Struct.mapPick(
     modelFields,
     ["name", "label", "mime_type", "colors", "bit_depth", "width", "height"],
     Schema.optionalKey
-  )
-);
+  ),
+});
 
 export const Data = <S extends Schema.Top>(data: S) => Schema.Struct({ data });
 
