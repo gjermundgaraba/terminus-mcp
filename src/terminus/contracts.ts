@@ -405,12 +405,12 @@ const exchangeInputFields = {
 };
 
 export const ExchangeInput = Schema.Struct({
-  ...ExtensionRef.fields,
+  extension_id: PositiveInt,
   ...exchangeInputFields,
 });
 
 export const ExchangeRef = Schema.Struct({
-  ...ExtensionRef.fields,
+  extension_id: PositiveInt,
   exchange_id: PositiveInt,
 });
 

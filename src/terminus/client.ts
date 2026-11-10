@@ -380,8 +380,6 @@ const make = Effect.gen(function* () {
   const firmware = api("GET", "api/firmware", Schema.Array(Firmware));
   const playlists = api("GET", "api/playlists", Schema.Array(Playlist));
 
-  const listPlaylists = Effect.map(playlists, (all) => ({ playlists: all }));
-
   const listScreens = (filters: ScreenFilters) =>
     api("GET", "api/screens", Schema.Array(Screen)).pipe(
       Effect.map((screens) => {
@@ -776,7 +774,7 @@ const make = Effect.gen(function* () {
     getDisplayContext,
     listScreens,
     getScreenImage,
-    listPlaylists,
+    listPlaylists: Effect.map(playlists, (all) => ({ playlists: all })),
     createScreen,
     updateScreen,
     deleteScreen,
