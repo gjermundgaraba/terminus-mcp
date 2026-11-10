@@ -19,10 +19,7 @@ import { download } from "../http-client.js";
 import {
   Extension,
   Firmware,
-  ListOf,
   Model,
-  OneOf,
-  OneOrMissing,
   Playlist,
   SafeDevice,
   Screen,
@@ -84,6 +81,30 @@ export const terminusConfig = Config.all({
     Config.map(Redacted.make)
   ),
 });
+
+// How Terminus answers with HTTP 200 for a missing resource: a 404 problem, or, from a playlist
+// delete before 0.79.0, empty data.
+// https://github.com/usetrmnl/terminus/blob/0.79.0/app/actions/api/screens/show.rb#L15-L19
+// https://github.com/usetrmnl/terminus/blob/0.78.0/app/actions/api/playlists/delete.rb#L15-L20
+const MissingAnswer = Schema.Union([
+  Schema.Struct({ status: Schema.Literal(404) }),
+  Schema.Struct({ data: Schema.Record(Schema.String, Schema.Never) }),
+]);
+
+const Missing = MissingAnswer.pipe(
+  Schema.decodeTo(
+    Schema.Null,
+    SchemaTransformation.transform<null, typeof MissingAnswer.Type>({
+      decode: () => null,
+      encode: () => ({ status: 404 }),
+    })
+  )
+);
+
+const Envelope = <S extends Schema.Top>(data: S) => Schema.Struct({ data });
+
+const EnvelopeOrMissing = <S extends Schema.Top>(data: S) =>
+  Schema.Union([Envelope(data), Missing]);
 
 const fail = (message: string) => Effect.fail(new TerminusError({ message }));
 
@@ -321,17 +342,16 @@ const make = Effect.gen(function* () {
     });
   };
 
-  const api = <
-    S extends Schema.Constraint & { readonly DecodingServices: never },
-  >(
-    method: "GET" | "POST" | "PATCH" | "DELETE",
+  const api = <A>(
+    method: "GET" | "POST" | "PATCH",
     path: string,
-    schema: S,
+    item: Schema.Codec<A, unknown>,
     body?: Payload
   ) =>
     respond(method, path, body).pipe(
-      Effect.flatMap(json(schema)),
-      asTerminusError("Terminus request failed")
+      Effect.flatMap(json(Envelope(item))),
+      asTerminusError("Terminus request failed"),
+      Effect.map(({ data }) => data)
     );
 
   const one = <A>(
@@ -345,7 +365,7 @@ const make = Effect.gen(function* () {
       Effect.flatMap((response) =>
         response.status === 404
           ? Effect.succeed(null)
-          : json(OneOrMissing(item))(response)
+          : json(EnvelopeOrMissing(item))(response)
       ),
       asTerminusError("Terminus request failed"),
       Effect.flatMap((found) =>
@@ -355,21 +375,18 @@ const make = Effect.gen(function* () {
       )
     );
 
-  const devices = api("GET", "api/devices", ListOf(SafeDevice));
-  const models = api("GET", "api/models", ListOf(Model));
-  const firmware = api("GET", "api/firmware", ListOf(Firmware));
-
-  const playlists = api("GET", "api/playlists", ListOf(Playlist)).pipe(
-    Effect.map(({ data }) => data)
-  );
+  const devices = api("GET", "api/devices", Schema.Array(SafeDevice));
+  const models = api("GET", "api/models", Schema.Array(Model));
+  const firmware = api("GET", "api/firmware", Schema.Array(Firmware));
+  const playlists = api("GET", "api/playlists", Schema.Array(Playlist));
 
   const listScreens = (filters: ScreenFilters) =>
-    api("GET", "api/screens", ListOf(Screen)).pipe(
-      Effect.map(({ data }) => {
+    api("GET", "api/screens", Schema.Array(Screen)).pipe(
+      Effect.map((screens) => {
         const query = filters.query?.toLocaleLowerCase();
 
         return {
-          screens: data.filter(
+          screens: screens.filter(
             (screen) =>
               (filters.model_id === undefined ||
                 screen.model_id === filters.model_id) &&
@@ -384,14 +401,10 @@ const make = Effect.gen(function* () {
   const getDisplayContext = Effect.fn("Terminus.getDisplayContext")(function* ({
     device_id: deviceId,
   }: DisplayQuery) {
-    const [
-      { data: allDevices },
-      { data: allModels },
-      allPlaylists,
-      { data: allFirmware },
-    ] = yield* Effect.all([devices, models, playlists, firmware], {
-      concurrency: "unbounded",
-    });
+    const [allDevices, allModels, allPlaylists, allFirmware] =
+      yield* Effect.all([devices, models, playlists, firmware], {
+        concurrency: "unbounded",
+      });
 
     const device =
       deviceId === undefined
@@ -490,11 +503,11 @@ const make = Effect.gen(function* () {
 
     const { html, ...screen } = input;
 
-    const { data } = yield* api("POST", "api/screens", OneOf(Screen), {
-      screen: { ...screen, content: html },
-    });
-
-    return { screen: data };
+    return {
+      screen: yield* api("POST", "api/screens", Screen, {
+        screen: { ...screen, content: html },
+      }),
+    };
   });
 
   const updateScreen = Effect.fn("Terminus.updateScreen")(function* (
@@ -502,16 +515,11 @@ const make = Effect.gen(function* () {
   ) {
     const { screen_id: screenId, html, label, mode } = input;
 
-    const { data } = yield* api(
-      "PATCH",
-      `api/screens/${screenId}`,
-      OneOf(Screen),
-      {
+    return {
+      screen: yield* api("PATCH", `api/screens/${screenId}`, Screen, {
         screen: { label, mode, content: html },
-      }
-    );
-
-    return { screen: data };
+      }),
+    };
   });
 
   const deleteScreen = Effect.fn("Terminus.deleteScreen")(function* ({
@@ -546,28 +554,24 @@ const make = Effect.gen(function* () {
     };
 
     if (!playlist) {
-      const { data } = yield* api(
-        "POST",
-        "api/playlists",
-        OneOf(Playlist),
-        payload
-      );
-
-      return { action: "created" as const, playlist: data };
+      return {
+        action: "created" as const,
+        playlist: yield* api("POST", "api/playlists", Playlist, payload),
+      };
     }
 
     const path = `api/playlists/${playlist.id}`;
-    const { data } = yield* api("PATCH", path, OneOf(Playlist), payload);
-    const [firstItem] = data.items;
+    const replaced = yield* api("PATCH", path, Playlist, payload);
+    const [firstItem] = replaced.items;
 
     if (!firstItem) {
-      return { action: "updated" as const, playlist: data };
+      return { action: "updated" as const, playlist: replaced };
     }
 
-    const { data: selected } = yield* api("PATCH", path, OneOf(Playlist), {
+    const selected = yield* api("PATCH", path, Playlist, {
       playlist: {
-        name: data.name,
-        label: data.label,
+        name: replaced.name,
+        label: replaced.label,
         current_item_id: firstItem.id,
       },
     });
@@ -589,20 +593,15 @@ const make = Effect.gen(function* () {
     device_id: deviceId,
     playlist_id,
   }: Assignment) {
-    const { data } = yield* api(
-      "PATCH",
-      `api/devices/${deviceId}`,
-      OneOf(SafeDevice),
-      {
+    return {
+      device: yield* api("PATCH", `api/devices/${deviceId}`, SafeDevice, {
         device: { playlist_id },
-      }
-    );
-
-    return { device: data };
+      }),
+    };
   });
 
-  // Terminus refuses an empty device patch, and a sleep start without its stop.
-  // https://github.com/usetrmnl/terminus/blob/0.79.0/app/contracts/devices/patch.rb#L10-L14
+  // Terminus refuses a sleep start without its stop.
+  // https://github.com/usetrmnl/terminus/blob/0.79.0/app/contracts/devices/patch.rb#L13-L14
   const updateDisplaySettings = Effect.fn("Terminus.updateDisplaySettings")(
     function* ({
       device_id: deviceId,
@@ -610,21 +609,8 @@ const make = Effect.gen(function* () {
       refresh_rate,
       sleep,
     }: DisplaySettings) {
-      if (
-        label === undefined &&
-        refresh_rate === undefined &&
-        sleep === undefined
-      ) {
-        return yield* fail(
-          "Give at least one of label, refresh_rate or sleep."
-        );
-      }
-
-      const { data } = yield* api(
-        "PATCH",
-        `api/devices/${deviceId}`,
-        OneOf(SafeDevice),
-        {
+      return {
+        device: yield* api("PATCH", `api/devices/${deviceId}`, SafeDevice, {
           device: {
             label,
             refresh_rate,
@@ -635,19 +621,15 @@ const make = Effect.gen(function* () {
                   sleep_stop_at: sleep?.stop_at ?? null,
                 }),
           },
-        }
-      );
-
-      return { device: data };
+        }),
+      };
     }
   );
 
   const createModel = Effect.fn("Terminus.createModel")(function* (
     model: ModelInput
   ) {
-    const { data } = yield* api("POST", "api/models", OneOf(Model), { model });
-
-    return { model: data };
+    return { model: yield* api("POST", "api/models", Model, { model }) };
   });
 
   // Terminus's model sync from TRMNL upserts every model TRMNL lists by name, so only a model
@@ -657,10 +639,6 @@ const make = Effect.gen(function* () {
     model_id: modelId,
     ...changes
   }: ModelUpdate) {
-    if (Object.keys(changes).length === 0) {
-      return yield* fail("Give at least one field to change.");
-    }
-
     const path = `api/models/${modelId}`;
     const current = yield* one("GET", path, Model, `Model ${modelId}`);
 
@@ -671,11 +649,7 @@ const make = Effect.gen(function* () {
       );
     }
 
-    const { data } = yield* api("PATCH", path, OneOf(Model), {
-      model: changes,
-    });
-
-    return { model: data };
+    return { model: yield* api("PATCH", path, Model, { model: changes }) };
   });
 
   const oneExtension = (
@@ -697,9 +671,11 @@ const make = Effect.gen(function* () {
       body
     ).pipe(Effect.map(redacted));
 
-  const listExtensions = api("GET", "api/extensions", ListOf(Extension)).pipe(
-    Effect.map(({ data }) => ({ extensions: data }))
-  );
+  const listExtensions = api(
+    "GET",
+    "api/extensions",
+    Schema.Array(Extension)
+  ).pipe(Effect.map((extensions) => ({ extensions })));
 
   const getExtension = Effect.fn("Terminus.getExtension")(function* ({
     extension_id: extensionId,
@@ -707,11 +683,7 @@ const make = Effect.gen(function* () {
     const extension = yield* oneExtension("GET", extensionId);
     const path = `${extensionPath(extensionId)}/exchanges`;
 
-    const { data: exchanges } = yield* api(
-      "GET",
-      path,
-      ListOf(TerminusExchange)
-    );
+    const exchanges = yield* api("GET", path, Schema.Array(TerminusExchange));
 
     return { extension, exchanges: exchanges.map(redacted) };
   });
@@ -721,13 +693,13 @@ const make = Effect.gen(function* () {
   ) {
     const { model_ids, device_ids, ...extension } = input;
 
-    const { data } = yield* api("POST", "api/extensions", OneOf(Extension), {
-      extension,
-      model_ids,
-      device_ids,
-    });
-
-    return { extension: data };
+    return {
+      extension: yield* api("POST", "api/extensions", Extension, {
+        extension,
+        model_ids,
+        device_ids,
+      }),
+    };
   });
 
   // Terminus clears the models and devices a patch omits, checks a schedule's interval and unit
@@ -773,11 +745,9 @@ const make = Effect.gen(function* () {
     const { extension_id: extensionId, ...exchange } = input;
     const path = `${extensionPath(extensionId)}/exchanges`;
 
-    const { data } = yield* api("POST", path, OneOf(TerminusExchange), {
-      exchange,
-    });
+    const created = yield* api("POST", path, TerminusExchange, { exchange });
 
-    return { exchange: redacted(data) };
+    return { exchange: redacted(created) };
   });
 
   const updateExchange = Effect.fn("Terminus.updateExchange")(function* (

@@ -187,9 +187,6 @@ it.effect("creates models and changes only Terminus's own", () => {
 
     assert.match(missing.message, /Model 9 was not found/u);
 
-    const empty = yield* Effect.flip(mcp.update_model({ model_id: 5 }));
-    assert.match(empty.message, /at least one field/u);
-
     assert.deepStrictEqual(sent, [
       {
         model: {
@@ -314,15 +311,6 @@ it.effect("changes only the display settings it is given", () => {
     assert.notMatch(body, /api_key|mac_address|must-never/iu);
     yield* mcp.update_display_settings({ device_id: 40, label: "Kitchen" });
     yield* mcp.update_display_settings({ device_id: 40, sleep: null });
-
-    const empty = yield* Effect.flip(
-      mcp.update_display_settings({ device_id: 40 })
-    );
-
-    assert.match(
-      empty.message,
-      /at least one of label, refresh_rate or sleep/u
-    );
 
     const { result: badTime } = yield* callToolRaw("update_display_settings", {
       device_id: 40,

@@ -17,9 +17,7 @@ const NullableNumber = Schema.NullOr(Schema.Finite);
 const ModelCss = Schema.Struct({
   classes: Schema.Record(Schema.String, Schema.String),
   variables: Schema.Array(Schema.Tuple([Schema.String, Schema.String])),
-}).pipe(
-  Schema.catchDecoding(() => Effect.succeedSome({ classes: {}, variables: [] }))
-);
+});
 
 export const SafeDevice = Schema.Struct({
   id: PositiveInt,
@@ -56,7 +54,11 @@ export const Model = Schema.Struct({
   offset_x: Schema.Int,
   offset_y: Schema.Int,
   scale_factor: Schema.Finite.check(Schema.isGreaterThan(0)),
-  css: ModelCss,
+  css: ModelCss.pipe(
+    Schema.catchDecoding(() =>
+      Effect.succeedSome({ classes: {}, variables: [] })
+    )
+  ),
   width: NonNegativeInt,
   height: NonNegativeInt,
   created_at: Schema.String,
@@ -78,25 +80,6 @@ export const Screen = Schema.Struct({
   size: NonNegativeInt,
   uri: Schema.String,
 });
-
-// How Terminus answers with HTTP 200 for a missing resource: a 404 problem, or, from a playlist
-// delete before 0.79.0, empty data.
-// https://github.com/usetrmnl/terminus/blob/0.79.0/app/actions/api/screens/show.rb#L15-L19
-// https://github.com/usetrmnl/terminus/blob/0.78.0/app/actions/api/playlists/delete.rb#L15-L20
-const MissingAnswer = Schema.Union([
-  Schema.Struct({ status: Schema.Literal(404) }),
-  Schema.Struct({ data: Schema.Record(Schema.String, Schema.Never) }),
-]);
-
-const Missing = MissingAnswer.pipe(
-  Schema.decodeTo(
-    Schema.Null,
-    SchemaTransformation.transform<null, typeof MissingAnswer.Type>({
-      decode: () => null,
-      encode: () => ({ status: 404 }),
-    })
-  )
-);
 
 const PlaylistItem = Schema.Struct({
   id: PositiveInt,
@@ -239,6 +222,10 @@ const LongText = Schema.String.check(
   Schema.isMaxLength(1_000_000)
 );
 
+const Description = Schema.optionalKey(
+  Schema.NullOr(Schema.String.check(Schema.isMaxLength(10_000)))
+);
+
 const Mode = Schema.optionalKey(
   Schema.Literals(["text", "dither"]).annotate({
     description:
@@ -354,9 +341,7 @@ const Weekday = Schema.Literals([
 const extensionFields = {
   name: ShortText,
   label: ShortText,
-  description: Schema.optionalKey(
-    Schema.NullOr(Schema.String.check(Schema.isMaxLength(10_000)))
-  ),
+  description: Description,
   kind: ExtensionKind,
   mode: Mode,
   template: LongText.annotate({
@@ -441,9 +426,7 @@ const modelFields = {
       "also uses is overwritten at the next sync.",
   }),
   label: ShortText,
-  description: Schema.optionalKey(
-    Schema.NullOr(Schema.String.check(Schema.isMaxLength(10_000)))
-  ),
+  description: Description,
   mime_type: Schema.Literals(["image/png", "image/webp", "image/bmp"]),
   colors: PositiveInt,
   bit_depth: PositiveInt,
@@ -466,12 +449,7 @@ const modelFields = {
     })
   ),
   css: Schema.optionalKey(
-    Schema.NullOr(
-      Schema.Struct({
-        classes: Schema.Record(Schema.String, Schema.String),
-        variables: Schema.Array(Schema.Tuple([Schema.String, Schema.String])),
-      })
-    ).annotate({
+    Schema.NullOr(ModelCss).annotate({
       description:
         "Framework screen classes and CSS variables, in the shape of model.css from " +
         "get_display_context.",
@@ -491,15 +469,6 @@ export const ModelUpdate = Schema.Struct({
     Schema.optionalKey
   ),
 });
-
-export const ListOf = <S extends Schema.Top>(item: S) =>
-  Schema.Struct({ data: Schema.Array(item) });
-
-export const OneOf = <S extends Schema.Top>(item: S) =>
-  Schema.Struct({ data: item });
-
-export const OneOrMissing = <S extends Schema.Top>(item: S) =>
-  Schema.Union([OneOf(item), Missing]);
 
 export type Model = typeof Model.Type;
 
