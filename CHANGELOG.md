@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.7.2
+
+Built on Effect `4.1.3` and `@gjermundgaraba/effect-actions` `0.31.0`. The container image runs on a refreshed Node `26.13.0` base image.
 
 ### Changes
 
