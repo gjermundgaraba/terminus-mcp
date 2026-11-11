@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM node:26.13.0-trixie-slim@sha256:e4db4c914bf8ad241bd24804fc25d272d89bad97e68cdc8a1414862790a02c39 AS build
+FROM node:26.13.0-trixie-slim@sha256:5adad64f9a1fca2d51972caa65983634c8a774eb300d72b20f7f2a0f60368072 AS build
 WORKDIR /app
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml vite.config.ts oxlint.config.ts oxfmt.config.ts tsconfig.json ./
@@ -11,7 +11,7 @@ COPY src ./src
 COPY docs ./docs
 RUN pnpm build && pnpm prune --prod --ignore-scripts
 
-FROM node:26.13.0-trixie-slim@sha256:e4db4c914bf8ad241bd24804fc25d272d89bad97e68cdc8a1414862790a02c39
+FROM node:26.13.0-trixie-slim@sha256:5adad64f9a1fca2d51972caa65983634c8a774eb300d72b20f7f2a0f60368072
 WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build --chown=node:node /app/package.json ./
